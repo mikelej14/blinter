@@ -78,6 +78,30 @@ jobs:
           & $exe @arguments
           if ($LASTEXITCODE -ne 0) { throw "Blinter native startup smoke test failed with code $LASTEXITCODE" }
 
+      - name: Verify Blinter installs and launches separately
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dest = Join-Path $env:RUNNER_TEMP 'Blinter Side By Side Test'
+          & 'alpha-package/Install-Blinter.ps1' -InstallDir $dest -NoDesktopShortcut
+          if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Blinter installer failed.' }
+          if (!(Test-Path (Join-Path $dest 'Blinter.exe'))) { throw 'Blinter did not install.' }
+          if (!(Test-Path (Join-Path $dest 'portable'))) { throw 'Blinter isolated settings missing.' }
+          if (!(Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\BlinterAlpha')) {
+            throw 'Blinter independent uninstall record missing.'
+          }
+          $exe = Join-Path $dest 'Blinter.exe'
+          & $exe --background --factory-startup --python 'tests/blinter_native_startup.py'
+          if ($LASTEXITCODE -ne 0) { throw "Installed Blinter failed runtime test: $LASTEXITCODE" }
+          # Leave personal portable directory for uninstall semantics validation.
+          & (Join-Path $dest 'Uninstall-Blinter.ps1')
+          if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\BlinterAlpha') {
+            throw 'Blinter uninstall entry survived removal.'
+          }
+          if (!(Test-Path (Join-Path $dest 'portable'))) {
+            throw 'Uninstall incorrectly removed saved Blinter preferences.'
+          }
+
       - name: Zip Windows installable Alpha (only when startup test passes)
         shell: pwsh
         run: |
