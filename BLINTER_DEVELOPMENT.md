@@ -160,3 +160,11 @@ The regression test `tests/blinter_rigid_regions.py` now captures a 512-vertex i
 ### Integration caveat
 
 The older **Feature Locks** panel and new **Feature Locks (Fast)** panel are still separate data systems. Do not mix them on overlapping selections until a single constraint controller is implemented. Because Blender is not installed in the execution environment, code has not yet passed a live Blender smoke test.
+
+## Named Locked Regions and one-click context menu
+
+Right-click in mesh Edit Mode and choose **Lock / Unlock Selection**, without opening nested tool menus. A fresh selection creates one tagged rigid region. Selecting all vertices of exactly one saved region and invoking the same action unlocks it. A partial or multi-region overlap is rejected so existing locks cannot be silently deleted.
+
+The right-side **Feature Locks (Fast)** panel now offers an editable region-name list, enable/disable toggles, click-to-activate rows, reselect, remove-one-lock and move-active-region actions. Reselect uses vertex selection mode for exact member retrieval; the geometry stays in its original mesh object. This is a sidebar list, not yet an Outliner hierarchy.
+
+Headless smoke tests now cover naming, reselecting and toggling. Blender executable/GUI verification still pending.
