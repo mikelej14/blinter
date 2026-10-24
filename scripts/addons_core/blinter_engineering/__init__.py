@@ -9,6 +9,7 @@ bl_info = {
 }
 
 import bpy
+from . import quick_actions
 import bmesh
 import blf
 from bpy.props import FloatProperty
@@ -112,6 +113,7 @@ def register():
     global _draw_handle
     for cls in classes:
         bpy.utils.register_class(cls)
+    quick_actions.register()
     if _draw_handle is None:
         _draw_handle = bpy.types.SpaceView3D.draw_handler_add(
             draw_dimensions, (), 'WINDOW', 'POST_PIXEL'
@@ -123,6 +125,7 @@ def unregister():
     if _draw_handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_draw_handle, 'WINDOW')
         _draw_handle = None
+    quick_actions.unregister()
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
