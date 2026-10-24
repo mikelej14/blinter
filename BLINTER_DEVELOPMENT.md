@@ -148,3 +148,15 @@ blender -b --python tests/blinter_rigid_regions.py -- /absolute/path/to/blinter
 ```
 
 The script validates a 512-vertex circular region and outside scaling, then uniform translation of the tagged vertices. It has not yet been run against Blender.
+
+## Compact group improvements — multiple protected regions
+
+The **Feature Locks (Fast)** panel is the preferred experimental path for rigid high-poly groups. It now supports **multiple independent tagged groups** in one mesh. Capture a second selection and the backend rejects overlap with previously captured groups. To move one group, enter its **Group ID**; Group ID zero selects the first active group. Resize Outside Rigid Regions preserves all *enabled* groups, while allowing disabled groups to resize.
+
+Bounds computation during resizing now uses one pass over mesh coordinates, avoiding repeated full-list minimum/maximum scans.
+
+The regression test `tests/blinter_rigid_regions.py` now captures a 512-vertex inner ring and a second 128-vertex outer ring, scales outside the first ring, then targets the first group for translation while verifying both groups are registered. These are test scripts, not yet confirmed runtime results.
+
+### Integration caveat
+
+The older **Feature Locks** panel and new **Feature Locks (Fast)** panel are still separate data systems. Do not mix them on overlapping selections until a single constraint controller is implemented. Because Blender is not installed in the execution environment, code has not yet passed a live Blender smoke test.
