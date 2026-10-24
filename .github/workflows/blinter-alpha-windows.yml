@@ -78,6 +78,8 @@ jobs:
           $arguments = @('--background', '--factory-startup', '--python-exit-code', '71', '--python', (Join-Path $PWD.Path 'tests/blinter_native_startup.py'))
           & $exe @arguments
           if ($LASTEXITCODE -ne 0) { throw "Blinter native startup smoke test failed with code $LASTEXITCODE" }
+          & $exe --background --factory-startup --python-exit-code 71 --python (Join-Path $PWD.Path 'tests/blinter_install_isolation.py')
+          if ($LASTEXITCODE -ne 0) { throw "Blinter is not isolated from normal Blender configuration" }
 
       - name: Verify Blinter installs and launches separately
         shell: pwsh
@@ -94,6 +96,8 @@ jobs:
           $exe = Join-Path $dest 'Blinter.exe'
           & $exe --background --factory-startup --python-exit-code 71 --python 'tests/blinter_native_startup.py'
           if ($LASTEXITCODE -ne 0) { throw "Installed Blinter failed runtime test: $LASTEXITCODE" }
+          & $exe --background --factory-startup --python-exit-code 71 --python 'tests/blinter_install_isolation.py'
+          if ($LASTEXITCODE -ne 0) { throw "Installed Blinter preference isolation test failed" }
           # Leave personal portable directory for uninstall semantics validation.
           & (Join-Path $dest 'Uninstall-Blinter.ps1')
           if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\BlinterAlpha') {
