@@ -27,17 +27,21 @@ def propose_adaptive_move(obj, bm, selection, displacement, reach, group_layer, 
     # A selected piece of a relative lock moves all of that rigid region.
     selected_groups = {v[group_layer] for v in selected
                        if group_layer and v[group_layer] in active_ids}
-    for lock in locks:
-        if lock.group_id in selected_groups and lock.kind == 'ANCHOR':
-            raise ValueError("World-fixed region selected; unlock before moving it")
     for group_id in selected_groups:
-        selected.update(groups[group_id])
+        lock = next(item for item in locks if item.group_id == group_id)
+        if lock.kind == 'ANCHOR':
+            # Like constrained whole-part scaling, anchored regions stay put.
+            selected.difference_update(groups[group_id])
+        else:
+            selected.update(groups[group_id])
+    selected_groups = {gid for gid in selected_groups
+                       if next(item for item in locks if item.group_id == gid).kind == 'RELATIVE'}
     # The influence field is based on BEFORE positions, including expanded
     # rigid groups, so it does not tear one group from its neighbours.
     positions = {v: frame @ v.co for v in bm.verts}
     feature_positions = [positions[v] for v in selected]
     if not feature_positions:
-        raise ValueError("Select vertices, edges, or faces")
+        raise ValueError("Only world-fixed geometry selected; nothing can move")
     center = sum(feature_positions, Vector((0, 0, 0))) / len(feature_positions)
     extent = max((p - center).length for p in feature_positions)
     kernel = max(reach, displacement.length * 2.0, extent * .1, EPS)
@@ -81,6 +85,10 @@ class BLINTER_OT_adapt_feature_move(bpy.types.Operator):
         name="Adaptation Reach (mm)", default=10.0, min=0.001,
         description="Neighbourhood which shifts with the feature; distant geometry stays unchanged",
     )
+    expand_reach: bpy.props.BoolProperty(
+        name="Expand If Needed", default=True,
+        description="Retry with a broader deformation region if the first local edit collapses faces",
+    )
 
     @classmethod
     def poll(cls, context):
@@ -104,10 +112,23 @@ class BLINTER_OT_adapt_feature_move(bpy.types.Operator):
             if delta.length < EPS:
                 return {'FINISHED'}
             reach = self.influence_mm / 1000.0
-            proposals, moved_ids = propose_adaptive_move(
-                obj, bm, selected, delta, reach, layer, members, locks,
-            )
-            preflight_and_apply(obj, bm, proposals)
+            moved_ids = set()
+            last_error = None
+            used_reach = reach
+            for multiplier in ((1, 2, 4) if self.expand_reach else (1,)):
+                used_reach = reach * multiplier
+                proposals, moved_ids = propose_adaptive_move(
+                    obj, bm, selected, delta, used_reach, layer, members, locks,
+                )
+                try:
+                    preflight_and_apply(obj, bm, proposals)
+                    last_error = None
+                    break
+                except ValueError as exc:
+                    # Validator restores all positions transactionally.
+                    last_error = exc
+            if last_error is not None:
+                raise ValueError(f"Unable to safely adapt surrounding mesh: {last_error}")
             # Update persistent group bounds only after the edit succeeds.
             for lock in locks:
                 if lock.group_id in moved_ids:
@@ -118,7 +139,7 @@ class BLINTER_OT_adapt_feature_move(bpy.types.Operator):
                             [[bounds[j][i] + delta[i] for i in range(3)] for j in range(2)]
                         )
             bmesh.update_edit_mesh(obj.data, loop_triangles=True, destructive=False)
-            self.report({'INFO'}, "Moved feature with connected mesh adaptation")
+            self.report({'INFO'}, f"Moved feature; mesh adaptation reach {used_reach * 1000:.2f} mm")
             return {'FINISHED'}
         except ValueError as exc:
             self.report({'WARNING'}, str(exc))
