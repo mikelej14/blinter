@@ -21,6 +21,8 @@ class TOPBAR_MT_blinter_design(bpy.types.Menu):
                             icon='DRIVER_DISTANCE')
             layout.operator("blinter.circle_diameter", text="Circular Feature Diameter",
                             icon='MESH_CIRCLE')
+            layout.operator("blinter.adapt_feature_move", text="Move + Adapt Mesh",
+                            icon='MOD_SMOOTH')
             layout.operator("blinter.scale_outside_regions", text="Resize Around Locks",
                             icon='TRANSFORM_SCALE')
             layout.menu("VIEW3D_MT_edit_mesh", text="More Mesh Tools")
@@ -75,6 +77,8 @@ class VIEW3D_PT_blinter_engineering(bpy.types.Panel):
                          icon='DRIVER_DISTANCE')
             col.operator("blinter.circle_diameter", text="Diameter of Selected Loop",
                          icon='MESH_CIRCLE')
+            col.operator("blinter.adapt_feature_move", text="Move & Adapt Connected Mesh",
+                         icon='MOD_SMOOTH')
             row = col.row(align=True)
             move = row.operator("blinter.transform_selection", text="Move", icon='TRANSFORM_MOVE')
             move.action = 'MOVE'
@@ -145,6 +149,8 @@ class VIEW3D_PT_blinter_precision(bpy.types.Panel):
                          icon='DRIVER_DISTANCE')
             col.operator("blinter.circle_diameter", text="Set Circular Diameter",
                          icon='MESH_CIRCLE')
+            col.operator("blinter.adapt_feature_move", text="Adapt Surrounding Mesh",
+                         icon='MOD_SMOOTH')
             col.operator("mesh.bevel", text="Precision Bevel", icon='MOD_BEVEL')
             col.operator("mesh.inset", text="Inset Face", icon='SELECT_EXTEND')
         elif context.mode == 'OBJECT' and context.active_object and context.active_object.type == 'MESH':
@@ -164,6 +170,8 @@ def draw_blinter_context(self, context):
     self.layout.operator("blinter.edge_dimension", text="Set Edge Length", icon='DRIVER_DISTANCE')
     self.layout.operator("blinter.circle_diameter", text="Set Circle Diameter",
                          icon='MESH_CIRCLE')
+    self.layout.operator("blinter.adapt_feature_move", text="Move + Adapt Mesh",
+                         icon='MOD_SMOOTH')
     row = self.layout.row(align=True)
     move = row.operator("blinter.transform_selection", text="Move With Locks",
                         icon='TRANSFORM_MOVE')
