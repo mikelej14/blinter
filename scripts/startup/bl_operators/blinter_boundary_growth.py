@@ -121,6 +121,79 @@ def _new_boundary_positions(obj, loop, old_center, new_center, target_radius,
     return proposals
 
 
+def _boundary_valid(obj, outer, new_center, normal, needed, proposals):
+    """Check closed contour encloses center with requested radial rim clearance."""
+    positions = [obj.matrix_world @ proposals[v] if v in proposals
+                 else obj.matrix_world @ v.co for v in outer]
+    axis_u = normal.orthogonal().normalized()
+    axis_v = normal.cross(axis_u).normalized()
+    flat = [((p-new_center).dot(axis_u), (p-new_center).dot(axis_v)) for p in positions]
+    inside = False
+    x, y = 0.0, 0.0
+    for i in range(len(flat)):
+        ax, ay = flat[i]
+        bx, by = flat[(i+1) % len(flat)]
+        if (ay > y) != (by > y):
+            crossing = ax + (y-ay) * (bx-ax) / (by-ay)
+            if crossing > x:
+                inside = not inside
+    if not inside:
+        return False
+    gap = min(_point_segment_distance(new_center, positions[i],
+                                      positions[(i+1) % len(positions)])
+              for i in range(len(positions)))
+    return gap >= needed - 1e-7
+
+
+def _repair_boundary(obj, outer, new_center, normal, needed, proposals, straight):
+    """Nudge violating contour segments outward, without replacing topology.
+
+    Repeatedly increase the radius of nearby contour portions until the entire
+    circular material envelope fits. Strictly reject if this simple planar
+    reconstruction cannot accommodate it without corrupting the mesh.
+    """
+    inv = obj.matrix_world.inverted()
+    for _ in range(12):
+        if _boundary_valid(obj, outer, new_center, normal, needed, proposals):
+            return proposals
+        points = [obj.matrix_world @ proposals[v] if v in proposals
+                  else obj.matrix_world @ v.co for v in outer]
+        additions = {}
+        for i in range(len(outer)):
+            a, b = points[i], points[(i+1) % len(points)]
+            segment = b - a
+            if segment.length_squared < EPS*EPS:
+                raise ValueError("Outer boundary contains a collapsed segment")
+            t = max(0.0, min(1.0, (new_center-a).dot(segment)/segment.length_squared))
+            nearest = a + segment * t
+            radial = nearest - new_center
+            distance = radial.length
+            if distance >= needed - 1e-7:
+                continue
+            if distance <= EPS:
+                raise ValueError("Hole center lies on boundary; rebuild topology first")
+            direction = radial / distance
+            delta = direction * (needed - distance + 1e-6)
+            for vert in (outer[i], outer[(i+1) % len(outer)]):
+                # Collect largest outward correction at each vertex per pass.
+                old = additions.get(vert)
+                if old is None or delta.length > old.length:
+                    additions[vert] = delta
+        if not additions:
+            break
+        # A named straight-edge constraint must be enforced by the outer
+        # boundary transform. If the repair would break that constraint, the
+        # initial straight translation was insufficient and we must reject.
+        if straight:
+            raise ValueError("Straight-edge clearance requires larger rigid boundary translation")
+        for vertex, change in additions.items():
+            world = obj.matrix_world @ proposals[vertex] if vertex in proposals else obj.matrix_world @ vertex.co
+            proposals[vertex] = inv @ (world + change)
+    if not _boundary_valid(obj, outer, new_center, normal, needed, proposals):
+        raise ValueError("Cannot preserve material clearance with existing mesh boundary; retopology required")
+    return proposals
+
+
 class BLINTER_OT_grow_boundary_for_feature(bpy.types.Operator):
     """Move circular mesh feature, extend exterior surface to maintain clearance."""
     bl_idname = "blinter.grow_boundary_for_feature"
@@ -182,6 +255,11 @@ class BLINTER_OT_grow_boundary_for_feature(bpy.types.Operator):
                 self.clearance_mm / 1000.0, normal, self.keep_edge_straight,
             )
             proposed.update(boundary)
+            needed = radius + self.clearance_mm / 1000.0
+            proposed = _repair_boundary(
+                obj, outer, center + delta, normal, needed,
+                proposed, self.keep_edge_straight,
+            )
             preflight_and_apply(obj, bm, proposed)
             bmesh.update_edit_mesh(obj.data, loop_triangles=True, destructive=False)
             self.report({'INFO'}, "Adjusted existing boundary and hole mesh together")
