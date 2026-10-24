@@ -136,7 +136,9 @@ classes = (BLINTER_OT_edge_dimension, BLINTER_OT_hole_cutter)
 
 def register():
     global _overlay
-    if _overlay is None:
+    # Background mode has no GPU context or View3D window region.
+    # The geometry operators must still register for headless release tests.
+    if _overlay is None and not bpy.app.background:
         _overlay = bpy.types.SpaceView3D.draw_handler_add(
             draw_dimensions, (), 'WINDOW', 'POST_PIXEL')
 
