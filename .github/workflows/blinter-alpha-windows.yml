@@ -112,15 +112,10 @@ jobs:
             throw 'Uninstall incorrectly removed saved Blinter preferences.'
           }
 
-      - name: Zip Windows installable Alpha (only when startup test passes)
-        shell: pwsh
-        run: |
-          Compress-Archive -Path alpha-package/* -DestinationPath 'Blinter-Alpha-Windows-x64.zip' -Force
-
       - name: Upload independent Windows Blinter package
         uses: actions/upload-artifact@v4
         with:
           name: Blinter-Alpha-Windows-x64
-          path: Blinter-Alpha-Windows-x64.zip
+          path: alpha-package/
           if-no-files-found: error
           retention-days: 14
