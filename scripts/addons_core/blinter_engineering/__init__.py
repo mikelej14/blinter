@@ -72,6 +72,25 @@ def draw_dimensions():
         if p:
             blf.position(font, p.x + 8, p.y + 8, 0)
             blf.draw(font, f"{length * 1000:.3f} mm")
+    # Always show valid persistent relative clearances for the active edit mesh.
+    obj = context.edit_object
+    if obj is not None and obj.type == 'MESH' and hasattr(obj.data, "blinter_edge_hole"):
+        rel = obj.data.blinter_edge_hole
+        if rel.enabled:
+            try:
+                bm = bmesh.from_edit_mesh(obj.data)
+                ring, reference, direction, clearance = relative_hole.geometry(obj, bm, rel)
+                mat = obj.matrix_world
+                a, b = (mat @ bm.verts[i].co for i in reference)
+                center = sum((mat @ bm.verts[i].co for i in ring), Vector((0, 0, 0))) / len(ring)
+                pos = location_3d_to_region_2d(region, rv3d, (a + b + center) / 3)
+                if pos:
+                    blf.color(font, 1.0, 0.72, 0.25, 1.0)
+                    blf.position(font, pos.x + 8, pos.y + 10, 0)
+                    blf.draw(font, f"LOCK  {clearance * 1000:.3f} mm")
+                    blf.color(font, 0.25, 0.8, 1.0, 1.0)
+            except (ValueError, IndexError, ZeroDivisionError):
+                pass
     corner = selected_corner_angle(context)
     if corner:
         pos, angle = corner
