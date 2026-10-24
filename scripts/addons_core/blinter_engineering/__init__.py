@@ -9,7 +9,7 @@ bl_info = {
 }
 
 import bpy
-from . import quick_actions
+from . import quick_actions, dimension_interaction
 import bmesh
 import blf
 import math
@@ -88,22 +88,37 @@ class BLINTER_OT_set_edge_length(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     length_mm: FloatProperty(name="Length (mm)", default=10.0, min=0.001, precision=3)
+    edge_index: bpy.props.IntProperty(name="Target Edge", default=-1, options={'HIDDEN'})
 
     @classmethod
     def poll(cls, context):
         return context.mode == 'EDIT_MESH' and context.edit_object is not None
 
     def invoke(self, context, event):
-        edges = selected_edges_world(context)
-        if edges:
-            self.length_mm = edges[0][2] * 1000.0
+        obj = context.edit_object
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.edges.ensure_lookup_table()
+        bm.edges.index_update()
+        if self.edge_index >= 0 and self.edge_index < len(bm.edges):
+            edge = bm.edges[self.edge_index]
+            a, b = (obj.matrix_world @ v.co for v in edge.verts)
+            self.length_mm = (a - b).length * 1000.0
+        else:
+            edges = selected_edges_world(context)
+            if len(edges) == 1:
+                self.length_mm = edges[0][2] * 1000.0
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
         obj = context.edit_object
         bm = bmesh.from_edit_mesh(obj.data)
-        edges = [e for e in bm.edges if e.select and not e.hide]
-        if len(edges) != 1:
+        bm.edges.ensure_lookup_table()
+        if self.edge_index >= 0:
+            bm.edges.index_update()
+            edges = [bm.edges[self.edge_index]] if self.edge_index < len(bm.edges) else []
+        else:
+            edges = [e for e in bm.edges if e.select and not e.hide]
+        if len(edges) != 1 or edges[0].hide:
             self.report({'WARNING'}, "Select exactly one edge")
             return {'CANCELLED'}
         edge = edges[0]
@@ -135,6 +150,7 @@ class BLINTER_PT_engineering(bpy.types.Panel):
         layout = self.layout
         layout.label(text="Selected edge dimensions in viewport")
         layout.operator("blinter.set_edge_length", icon='DRIVER_DISTANCE')
+        layout.operator("blinter.click_dimension", icon='RESTRICT_SELECT_OFF')
         layout.label(text="Length edit moves edge endpoints", icon='INFO')
 
 
@@ -146,6 +162,7 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     quick_actions.register()
+    dimension_interaction.register()
     if _draw_handle is None:
         _draw_handle = bpy.types.SpaceView3D.draw_handler_add(
             draw_dimensions, (), 'WINDOW', 'POST_PIXEL'
@@ -157,6 +174,7 @@ def unregister():
     if _draw_handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_draw_handle, 'WINDOW')
         _draw_handle = None
+    dimension_interaction.unregister()
     quick_actions.unregister()
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
