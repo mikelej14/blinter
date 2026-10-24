@@ -26,6 +26,14 @@ def inspect_topology(bm, expected_components=None):
     for face in bm.faces:
         if not face.is_valid or face.calc_area() <= EPS * EPS:
             raise ValueError("Degenerate mesh face")
+        if len(set(face.verts)) != len(face.verts):
+            raise ValueError("Face contains duplicate vertices")
+    edge_pairs = set()
+    for edge in bm.edges:
+        pair = frozenset(edge.verts)
+        if pair in edge_pairs:
+            raise ValueError("Duplicate edge between the same vertices")
+        edge_pairs.add(pair)
     seen = set()
     components = 0
     for vert in bm.verts:
@@ -87,8 +95,20 @@ def stage_refine(bm, indices, cuts):
     components = inspect_topology(bm)
     stage = bm.copy()
     try:
+        original_vertices = len(stage.verts)
+        original_edges = len(stage.edges)
+        original_faces = len(stage.faces)
+        original_boundary_count = sum(1 for edge in stage.edges if edge.is_boundary)
         split_existing_edges(stage, indices, cuts)
         inspect_topology(stage, expected_components=components)
+        if len(stage.verts) != original_vertices + len(indices)*cuts:
+            raise ValueError("Refinement vertex count differs from expected")
+        if len(stage.edges) != original_edges + len(indices)*cuts:
+            raise ValueError("Refinement edge count differs from expected")
+        if len(stage.faces) != original_faces:
+            raise ValueError("Refinement unexpectedly created or deleted faces")
+        if sum(1 for edge in stage.edges if edge.is_boundary) != original_boundary_count + len(indices)*cuts:
+            raise ValueError("Refinement changed manifold boundary classification")
         return components
     finally:
         stage.free()
