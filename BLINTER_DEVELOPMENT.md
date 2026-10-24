@@ -48,3 +48,17 @@ Derived from Blender, GPL-3.0 compatible; retain upstream notices and license. D
 ## Important
 
 The current first commit is **a prototype**, not a rebuilt Blender executable. A Blender build and interactive verification are still required.
+
+## Interactive viewport measurements (prototype)
+
+In Edit Mode, select an edge and choose **Blinter > Precision Design > Edit Dimension on Model**. Click a displayed edge-length label to open a numerical edit dialog, or Esc/right-click to exit picking mode. This is an explicit modal tool; Blender's ordinary selection is unchanged outside it. The active face/edge menu remains available in Quick Modeling.
+
+## Persistent edge length locks (manual restore, experimental)
+
+Select one mesh edge and choose **Blinter > Edge Length Locks > Lock Selected Edge Length**. Locks are saved on the mesh datablock inside a .blend file. You may edit that edge length and choose **Restore Edge Length Locks** to bring it back to the saved world-space length. **Automatic constraint enforcement is not implemented**. This does not constrain neighboring faces, hole-to-edge offsets, bolt patterns, or every native Blender transform. Locked edge measurements are not yet always-on overlays.
+
+Lock references currently use vertex indices plus vertex/edge counts. This detects some topology changes, but **cannot detect vertex reordering with identical counts**. Multiple adjoining locks may conflict and restoration currently processes them sequentially, so it is not a general constraint solver. Always keep a saved original when testing. These limitations must be addressed before claiming manufacturing-grade constraint integrity.
+
+## Validation status
+
+Changes remain unverified inside a real Blender GUI, including click-hit coordinates, Blender 4.3+ API details and overlay event routing. Run the headless smoke test and interactive manual checks before merging. No automated build has been run from this workspace.
