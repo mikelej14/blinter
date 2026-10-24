@@ -8,7 +8,7 @@ import bpy
 import bmesh
 import json
 from mathutils import Vector
-from bpy.props import IntProperty, StringProperty, BoolProperty, CollectionProperty, FloatVectorProperty
+from bpy.props import IntProperty, StringProperty, BoolProperty, CollectionProperty, FloatVectorProperty, EnumProperty
 
 TAG = "blinter_region_tag"
 
@@ -20,6 +20,7 @@ class BLINTER_PG_rigid_region(bpy.types.PropertyGroup):
     bounds_json: StringProperty(default="[]")
     enabled: BoolProperty(default=True)
     name: StringProperty(default='Rigid Feature')
+    kind: EnumProperty(items=[('ANCHOR', 'World Fixed', 'Hold world coordinates'), ('RELATIVE', 'Rigid Group', 'Preserve region shape as a movable group')], default='RELATIVE')
 
 
 def edit_mesh(context):
@@ -29,17 +30,22 @@ def edit_mesh(context):
     return obj, bmesh.from_edit_mesh(obj.data)
 
 
-def selection_vertices(bm):
+def selection_elements(bm):
+    """Return explicitly selected domain elements and participating vertices."""
     if 'FACE' in bm.select_mode:
         faces = [f for f in bm.faces if f.select and not f.hide]
         if faces:
-            return list({v for f in faces for v in f.verts})
+            return len(faces), list({v for f in faces for v in f.verts}), 'faces'
     if 'EDGE' in bm.select_mode:
         edges = [e for e in bm.edges if e.select and not e.hide]
         if edges:
-            return list({v for e in edges for v in e.verts})
-    return [v for v in bm.verts if v.select and not v.hide]
+            return len(edges), list({v for e in edges for v in e.verts}), 'edges'
+    verts = [v for v in bm.verts if v.select and not v.hide]
+    return len(verts), verts, 'vertices'
 
+
+def selection_vertices(bm):
+    return selection_elements(bm)[1]
 
 def region_members(bm):
     layer = bm.verts.layers.int.get(TAG)
@@ -89,6 +95,13 @@ class BLINTER_OT_capture_rigid_region(bpy.types.Operator):
     bl_idname = "blinter.capture_rigid_region"
     bl_label = "Lock Selection as Rigid Region"
     bl_options = {'REGISTER', 'UNDO'}
+    lock_type: EnumProperty(
+        name="Lock",
+        items=[('AUTO', 'Automatic', 'One selected element fixes to world; multiple create relative group'),
+               ('ANCHOR', 'World Fixed', 'Pin this region to world coordinates'),
+               ('RELATIVE', 'Rigid Group', 'Move as a single rigid region')],
+        default='AUTO',
+    )
 
     @classmethod
     def poll(cls, context):
@@ -97,7 +110,9 @@ class BLINTER_OT_capture_rigid_region(bpy.types.Operator):
     def execute(self, context):
         try:
             obj, bm = edit_mesh(context)
-            selected = selection_vertices(bm)
+            selected_count, selected, domain = selection_elements(bm)
+            kind = (('ANCHOR' if selected_count == 1 else 'RELATIVE')
+                    if self.lock_type == 'AUTO' else self.lock_type)
             if not selected:
                 raise ValueError("Select mesh vertices, edges or faces")
             layer, groups = validate_regions(obj, bm)
@@ -113,14 +128,15 @@ class BLINTER_OT_capture_rigid_region(bpy.types.Operator):
                 v[layer] = group_id
             lock = obj.data.blinter_rigid_regions.add()
             lock.group_id = group_id
-            lock.name = f"Feature {group_id}"
+            lock.name = ("World Anchor" if kind == 'ANCHOR' else "Rigid Region") + f" {group_id}"
+            lock.kind = kind
             lock.count = len(selected)
             lock.boundary_edges = boundary
             lock.bounds_json = json.dumps(bounds)
             obj.data["blinter_next_rigid_group"] = group_id + 1
             obj.data.blinter_active_rigid_region = len(obj.data.blinter_rigid_regions) - 1
             bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
-            self.report({'INFO'}, f"One rigid region: {len(selected)} vertices, {boundary} boundary edges")
+            self.report({'INFO'}, f"{kind}: {selected_count} {domain}, {len(selected)} vertices, {boundary} boundary edges")
             return {'FINISHED'}
         except ValueError as error:
             self.report({'WARNING'}, str(error))
@@ -151,6 +167,8 @@ class BLINTER_OT_move_rigid_region(bpy.types.Operator):
                     if self.group_id else (eligible[0] if eligible else None))
             if lock is None:
                 raise ValueError("No enabled rigid group matches the requested ID")
+            if lock.kind == 'ANCHOR':
+                raise ValueError("World-fixed region cannot move until changed to Relative")
             vertices = groups.get(lock.group_id, [])
             delta = Vector(self.offset_mm) / 1000.0
             local_delta = obj.matrix_world.inverted_safe().to_3x3() @ delta
@@ -347,7 +365,7 @@ class BLINTER_OT_toggle_selection_lock(bpy.types.Operator):
                 self.report({'INFO'}, f"Unlocked region {lock.name}")
                 return {'FINISHED'}
             # Reuse the same capture backend as the right sidebar.
-            return bpy.ops.blinter.capture_rigid_region('EXEC_DEFAULT')
+            return bpy.ops.blinter.capture_rigid_region('EXEC_DEFAULT', lock_type='AUTO')
         except ValueError as exc:
             self.report({'WARNING'}, str(exc))
             return {'CANCELLED'}
