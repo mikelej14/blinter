@@ -119,8 +119,8 @@ class BLINTER_OT_join_crossing_edges(bpy.types.Operator):
                 stage.edges.ensure_lookup_table()
                 split_and_join(stage, stage.edges[index_a], stage.edges[index_b],
                                hit, local_tol)
-                if inspect_topology(stage) != original_components-1:
-                    raise ValueError("Crossing should connect exactly two components")
+                if inspect_topology(stage) not in (original_components, original_components - 1):
+                    raise ValueError("Crossing unexpectedly changed component connectivity")
             finally:
                 stage.free()
             split_and_join(bm, ea, eb, hit, local_tol)
