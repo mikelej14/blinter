@@ -12,6 +12,7 @@ import bpy
 from . import quick_actions
 import bmesh
 import blf
+import math
 from bpy.props import FloatProperty
 from bpy_extras.view3d_utils import location_3d_to_region_2d
 from mathutils import Vector
@@ -33,6 +34,30 @@ def selected_edges_world(context):
     return output
 
 
+def selected_corner_angle(context):
+    """Angle at a shared vertex when exactly two connected edges are selected."""
+    obj = context.edit_object
+    if not obj or obj.type != 'MESH':
+        return None
+    bm = bmesh.from_edit_mesh(obj.data)
+    edges = [edge for edge in bm.edges if edge.select and not edge.hide]
+    if len(edges) != 2:
+        return None
+    shared = set(edges[0].verts).intersection(edges[1].verts)
+    if len(shared) != 1:
+        return None
+    vertex = next(iter(shared))
+    tips = [next(v for v in e.verts if v != vertex) for e in edges]
+    mat = obj.matrix_world
+    center = mat @ vertex.co
+    a = (mat @ tips[0].co) - center
+    b = (mat @ tips[1].co) - center
+    if a.length < 1e-12 or b.length < 1e-12:
+        return None
+    radians = math.acos(max(-1.0, min(1.0, a.normalized().dot(b.normalized()))))
+    return center, math.degrees(radians)
+
+
 def draw_dimensions():
     context = bpy.context
     region = context.region
@@ -47,6 +72,13 @@ def draw_dimensions():
         if p:
             blf.position(font, p.x + 8, p.y + 8, 0)
             blf.draw(font, f"{length * 1000:.3f} mm")
+    corner = selected_corner_angle(context)
+    if corner:
+        pos, angle = corner
+        pixel = location_3d_to_region_2d(region, rv3d, pos)
+        if pixel:
+            blf.position(font, pixel.x + 12, pixel.y - 24, 0)
+            blf.draw(font, f"{angle:.2f} deg")
 
 
 class BLINTER_OT_set_edge_length(bpy.types.Operator):
