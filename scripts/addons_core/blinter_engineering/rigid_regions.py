@@ -118,6 +118,7 @@ class BLINTER_OT_capture_rigid_region(bpy.types.Operator):
             lock.boundary_edges = boundary
             lock.bounds_json = json.dumps(bounds)
             obj.data["blinter_next_rigid_group"] = group_id + 1
+            obj.data.blinter_active_rigid_region = len(obj.data.blinter_rigid_regions) - 1
             bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
             self.report({'INFO'}, f"One rigid region: {len(selected)} vertices, {boundary} boundary edges")
             return {'FINISHED'}
@@ -233,6 +234,150 @@ class BLINTER_OT_clear_rigid_regions(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class BLINTER_UL_locked_regions(bpy.types.UIList):
+    """Renameable groups within the same mesh, not separate Blender objects."""
+    bl_idname = "BLINTER_UL_locked_regions"
+
+    def draw_item(self, context, layout, data, item, icon, active_data,
+                  active_propname, index):
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            row = layout.row(align=True)
+            row.prop(item, "name", text="", emboss=False, icon='GROUP_VERTEX')
+            row.prop(item, "enabled", text="", emboss=False,
+                     icon='DECORATE_LOCKED' if item.enabled else 'DECORATE_UNLOCKED')
+        else:
+            layout.label(text="", icon='GROUP_VERTEX')
+
+
+def active_region(obj):
+    regions = obj.data.blinter_rigid_regions
+    index = obj.data.blinter_active_rigid_region
+    if not 0 <= index < len(regions):
+        raise ValueError("Choose a locked region in the list")
+    return regions[index]
+
+
+class BLINTER_OT_select_locked_region(bpy.types.Operator):
+    """Reselect the named locked region as vertices without splitting the mesh."""
+    bl_idname = "blinter.select_locked_region"
+    bl_label = "Select Locked Region"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    extend: BoolProperty(name="Add to Selection", default=False)
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH' and context.edit_object is not None
+
+    def execute(self, context):
+        try:
+            obj, bm = edit_mesh(context)
+            lock = active_region(obj)
+            _, members = validate_regions(obj, bm)
+            vertices = members.get(lock.group_id, [])
+            if len(vertices) != lock.count:
+                raise ValueError("Stored region member count is invalid")
+            # Vertex mode avoids inadvertently selecting adjacent faces outside
+            # the saved region. This operation intentionally changes select mode.
+            context.tool_settings.mesh_select_mode = (True, False, False)
+            bm.select_mode = {'VERT'}
+            if not self.extend:
+                for v in bm.verts:
+                    v.select_set(False)
+            for v in vertices:
+                v.select_set(True)
+            bm.select_flush_mode()
+            bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+            return {'FINISHED'}
+        except ValueError as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
+
+
+class BLINTER_OT_remove_selected_region(bpy.types.Operator):
+    """Unlock one named region without deleting any mesh geometry."""
+    bl_idname = "blinter.remove_selected_region"
+    bl_label = "Unlock Listed Region"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH' and context.edit_object is not None
+
+    def execute(self, context):
+        try:
+            obj, bm = edit_mesh(context)
+            lock = active_region(obj)
+            layer, groups = validate_regions(obj, bm)
+            if layer is None:
+                raise ValueError("Missing region membership layer")
+            for v in groups.get(lock.group_id, []):
+                v[layer] = 0
+            index = obj.data.blinter_active_rigid_region
+            obj.data.blinter_rigid_regions.remove(index)
+            obj.data.blinter_active_rigid_region = min(
+                index, len(obj.data.blinter_rigid_regions) - 1
+            )
+            bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+            return {'FINISHED'}
+        except ValueError as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
+
+
+class BLINTER_OT_toggle_selection_lock(bpy.types.Operator):
+    """One-click context lock/unlock for arbitrary mesh selections."""
+    bl_idname = "blinter.toggle_selection_lock"
+    bl_label = "Lock / Unlock Selection"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH' and context.edit_object is not None
+
+    def execute(self, context):
+        try:
+            obj, bm = edit_mesh(context)
+            selected = set(selection_vertices(bm))
+            if not selected:
+                raise ValueError("Select vertices, edges, or faces first")
+            layer, groups = validate_regions(obj, bm)
+            hits = [lock for lock in obj.data.blinter_rigid_regions
+                    if any(v in selected for v in groups.get(lock.group_id, []))]
+            if hits:
+                if len(hits) != 1 or selected != set(groups[hits[0].group_id]):
+                    raise ValueError(
+                        "Selection overlaps a lock. Select the complete named region "
+                        "to unlock it, or use the region list"
+                    )
+                lock = hits[0]
+                for v in groups[lock.group_id]:
+                    v[layer] = 0
+                index = next(i for i, item in enumerate(obj.data.blinter_rigid_regions)
+                             if item.group_id == lock.group_id)
+                obj.data.blinter_rigid_regions.remove(index)
+                obj.data.blinter_active_rigid_region = min(
+                    index, len(obj.data.blinter_rigid_regions) - 1
+                )
+                bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+                self.report({'INFO'}, f"Unlocked region {lock.name}")
+                return {'FINISHED'}
+            # Reuse the same capture backend as the right sidebar.
+            return bpy.ops.blinter.capture_rigid_region('EXEC_DEFAULT')
+        except ValueError as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
+
+
+def context_lock_menu(self, context):
+    if context.mode != 'EDIT_MESH' or context.edit_object is None:
+        return
+    layout = self.layout
+    layout.separator()
+    layout.operator("blinter.toggle_selection_lock", text="Lock / Unlock Selection",
+                    icon='DECORATE_LOCKED')
+
+
 class BLINTER_PT_rigid_regions(bpy.types.Panel):
     bl_label = "Feature Locks (Fast)"
     bl_idname = "BLINTER_PT_rigid_regions"
@@ -241,20 +386,37 @@ class BLINTER_PT_rigid_regions(bpy.types.Panel):
     bl_category = 'Blinter'
 
     def draw(self, context):
-        col = self.layout.column(align=True)
-        col.operator("blinter.capture_rigid_region", icon='DECORATE_LOCKED')
-        col.operator("blinter.move_rigid_region", icon='TRANSFORM_MOVE')
-        col.operator("blinter.scale_outside_regions", icon='TRANSFORM_SCALE')
-        col.operator("blinter.clear_rigid_regions", icon='UNLOCKED')
-        if context.edit_object and context.edit_object.type == 'MESH':
-            locks = context.edit_object.data.blinter_rigid_regions
-            col.label(text=f"Regions: {len(locks)}")
-            for lock in list(locks)[:8]:
-                col.label(text=f"#{lock.group_id}: {lock.count} verts")
-        col.label(text="One transform for all tagged vertices")
+        layout = self.layout
+        obj = context.edit_object
+        if not obj or obj.type != 'MESH':
+            layout.label(text="Edit a mesh to manage locks")
+            return
+        mesh = obj.data
+        layout.operator("blinter.toggle_selection_lock",
+                        text="Lock / Unlock Selection", icon='DECORATE_LOCKED')
+        row = layout.row()
+        row.template_list("BLINTER_UL_locked_regions", "",
+                          mesh, "blinter_rigid_regions",
+                          mesh, "blinter_active_rigid_region", rows=5)
+        actions = row.column(align=True)
+        actions.operator("blinter.select_locked_region", text="", icon='RESTRICT_SELECT_OFF')
+        actions.operator("blinter.remove_selected_region", text="", icon='REMOVE')
+        i = mesh.blinter_active_rigid_region
+        if 0 <= i < len(mesh.blinter_rigid_regions):
+            lock = mesh.blinter_rigid_regions[i]
+            detail = layout.box()
+            detail.label(text=f"Region #{lock.group_id}: {lock.count:,} vertices")
+            detail.label(text=f"Boundary: {lock.boundary_edges:,} edges")
+            op = detail.operator("blinter.move_rigid_region",
+                                 text="Move This Region", icon='TRANSFORM_MOVE')
+            op.group_id = lock.group_id
+        layout.operator("blinter.scale_outside_regions", icon='TRANSFORM_SCALE')
+        layout.operator("blinter.clear_rigid_regions", icon='UNLOCKED')
 
 
-classes = (BLINTER_PG_rigid_region, BLINTER_OT_capture_rigid_region,
+classes = (BLINTER_PG_rigid_region, BLINTER_UL_locked_regions,
+           BLINTER_OT_select_locked_region, BLINTER_OT_remove_selected_region,
+           BLINTER_OT_toggle_selection_lock, BLINTER_OT_capture_rigid_region,
            BLINTER_OT_move_rigid_region, BLINTER_OT_scale_outside_regions,
            BLINTER_OT_clear_rigid_regions, BLINTER_PT_rigid_regions)
 
@@ -263,9 +425,13 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Mesh.blinter_rigid_regions = CollectionProperty(type=BLINTER_PG_rigid_region)
+    bpy.types.Mesh.blinter_active_rigid_region = IntProperty(default=-1)
+    bpy.types.VIEW3D_MT_edit_mesh_context_menu.append(context_lock_menu)
 
 
 def unregister():
+    bpy.types.VIEW3D_MT_edit_mesh_context_menu.remove(context_lock_menu)
+    del bpy.types.Mesh.blinter_active_rigid_region
     del bpy.types.Mesh.blinter_rigid_regions
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
