@@ -44,6 +44,9 @@ def main():
         assert bpy.ops.blinter.capture_rigid_region() == {'FINISHED'}
         lock = mesh.blinter_rigid_regions[0]
         assert lock.count == 512
+        assert mesh.blinter_active_rigid_region == 0
+        lock.name = "Mounting Hole Pattern"
+        assert lock.name == "Mounting Hole Pattern"
         # Group has no 512x coordinate JSON snapshot.
         assert len(lock.bounds_json) < 200
         bm = bmesh.from_edit_mesh(mesh)
@@ -67,6 +70,17 @@ def main():
         assert len(mesh.blinter_rigid_regions) == 2
         second = mesh.blinter_rigid_regions[1]
         assert second.count == 128
+        assert mesh.blinter_active_rigid_region == 1
+        assert bpy.ops.blinter.select_locked_region() == {'FINISHED'}
+        bm = bmesh.from_edit_mesh(mesh)
+        selected = [v for v in bm.verts if v.select]
+        assert len(selected) == second.count
+        assert bpy.ops.blinter.toggle_selection_lock() == {'FINISHED'}
+        assert len(mesh.blinter_rigid_regions) == 1
+        # Lock second group again using the same right-click backend.
+        assert bpy.ops.blinter.toggle_selection_lock() == {'FINISHED'}
+        assert len(mesh.blinter_rigid_regions) == 2
+        second = mesh.blinter_rigid_regions[1]
         assert bpy.ops.blinter.move_rigid_region(group_id=lock.group_id, offset_mm=(6, 0, 0)) == {'FINISHED'}
         for v in vertices:
             assert (v.co - before[id(v)] - Vector((.006, 0, 0))).length < 1e-7
