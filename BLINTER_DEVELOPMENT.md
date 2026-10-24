@@ -266,3 +266,33 @@ intersection handling remain next milestones.
 mesh, moves the inner circle 7 mm, and asserts that the outer perimeter
 accommodates a 6.35 mm margin without splitting topology. The test remains
 unrun in a compiled Blender executable. GitHub Python CI checks syntax only.
+
+## Automatic intersection healing — native mesh requirement and initial primitive
+
+Crossing *mesh edges* should become a single shared BMesh vertex, with four
+connected edges, not merely visually overlap. Intentional narrow clearances
+must remain dimensionally accurate: no global Remove Doubles or broad epsilon.
+
+The new built-in module `scripts/startup/bl_operators/blinter_intersections.py`
+contains a first **Join Crossing Edges** tool for selected, non-face-attached
+wire edges. It finds actual interior 3D segment intersections within an explicit
+millimeter tolerance, rejects parallel/collinear coincidences and endpoint
+ambiguities, stages the edit on a copied BMesh for validation, then splits
+both original edges at the same location and welds **only** those two new
+vertices. It checks the resulting single four-way junction and components
+without reconstructing/exporting the model.
+
+This is a topology-repair building block, **not yet an automatic global
+intersection resolver**. Face-attached edges cannot simply be crossed and
+welded; their associated faces may have to be split and locally retessellated,
+possibly changing manifoldness. Those cases intentionally fail until planar
+face-arrangement and transaction-safe rollback are implemented. Likewise,
+large coincident sections, endpoint-on-edge connections, overlaid polygons,
+and intersections between different 3D surfaces need distinct rules.
+The early implementation currently processes one crossing per invocation;
+the goal is to run conflict detection and localized repair automatically
+inside future native Blender Move/Scale/Extrude commits.
+
+`tests/blinter_intersections.py` contains a 2-edge X-junction test expecting
+5 vertices, 4 connected edges and one shared center vertex. It has not yet
+been executed in a real compiled Blender runtime.
