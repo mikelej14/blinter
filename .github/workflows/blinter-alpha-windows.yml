@@ -23,8 +23,23 @@ jobs:
       - name: Checkout fork with original assets
         uses: actions/checkout@v4
         with:
-          lfs: true
+          lfs: false
           fetch-depth: 1
+
+      - name: Restore Blender LFS assets from official upstream
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # GitHub forks of Blender often have LFS pointer files but lack the
+          # objects in their own LFS storage. Fetch them from upstream instead.
+          git lfs install --local
+          git config --local lfs.url https://projects.blender.org/blender/blender.git/info/lfs
+          git lfs pull
+          if ($LASTEXITCODE -ne 0) { throw "Official Blender LFS source asset retrieval failed" }
+          $startup = 'release/datafiles/startup.blend'
+          if (!(Test-Path $startup) -or (Get-Item $startup).Length -lt 1024) {
+            throw "startup.blend is still a Git LFS pointer, cannot compile a working GUI"
+          }
 
       - name: Get required Blender native Windows libraries
         shell: pwsh
