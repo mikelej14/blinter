@@ -1,0 +1,92 @@
+name: Blinter Alpha Windows x64 Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/blinter-engineering-foundation
+    paths:
+      - .github/workflows/blinter-alpha-windows.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-package:
+    name: Build native Blinter fork (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 360
+    steps:
+      - name: Checkout fork with original assets
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 1
+
+      - name: Get required Blender native Windows libraries
+        shell: pwsh
+        run: |
+          git lfs install
+          git submodule update --init lib/windows_x64
+          if ($LASTEXITCODE -ne 0) { throw "Blender dependency submodule failed." }
+          git -C lib/windows_x64 lfs pull
+          if ($LASTEXITCODE -ne 0) { throw "Blender native dependencies LFS failed." }
+
+      - name: Build Blinter from fork source (GUI-capable)
+        shell: cmd
+        run: |
+          call make.bat full 2022
+          if errorlevel 1 exit /b 1
+
+      - name: Stage isolated Blinter Alpha program
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $buildRoots = @(Get-ChildItem -Path (Split-Path $PWD.Path) -Directory -Filter 'build_windows_Full_x64*')
+          $candidates = @($buildRoots | ForEach-Object {
+            Get-ChildItem -LiteralPath $_.FullName -Filter 'blender.exe' -Recurse -ErrorAction SilentlyContinue
+          } | Where-Object {
+            Test-Path (Join-Path $_.DirectoryName '5.4')
+          })
+          if ($candidates.Count -lt 1) {
+            throw "Could not locate complete 5.4 Blender install tree after build."
+          }
+          $binary = $candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $out = Join-Path $PWD.Path 'alpha-package'
+          $payload = Join-Path $out 'Blinter'
+          New-Item -ItemType Directory -Force -Path $payload | Out-Null
+          Copy-Item -LiteralPath (Join-Path $binary.DirectoryName '*') -Destination $payload -Recurse -Force
+          # Rename the actual fork executable; normal Blender remains untouched.
+          Rename-Item -LiteralPath (Join-Path $payload 'blender.exe') -NewName 'Blinter.exe'
+          $manifest = Join-Path $payload 'blender.exe.manifest'
+          if (Test-Path $manifest) { Rename-Item $manifest 'Blinter.exe.manifest' }
+          if (Test-Path (Join-Path $payload 'blender-launcher.exe')) {
+            Remove-Item (Join-Path $payload 'blender-launcher.exe') -Force
+          }
+          New-Item -ItemType Directory -Force -Path (Join-Path $payload 'portable') | Out-Null
+          Copy-Item packaging/windows/Install-Blinter.ps1 $out
+          Copy-Item packaging/windows/Uninstall-Blinter.ps1 $out
+          Copy-Item packaging/windows/SETUP_BLINTER.cmd $out
+          Write-Host "Staged Blinter executable: $(Join-Path $payload 'Blinter.exe')"
+
+      - name: Check renamed Blinter executable and isolated startup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD.Path 'alpha-package/Blinter/Blinter.exe'
+          $arguments = @('--background', '--factory-startup', '--python', (Join-Path $PWD.Path 'tests/blinter_native_startup.py'))
+          & $exe @arguments
+          if ($LASTEXITCODE -ne 0) { throw "Blinter native startup smoke test failed with code $LASTEXITCODE" }
+
+      - name: Zip Windows installable Alpha (only when startup test passes)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path alpha-package/* -DestinationPath 'Blinter-Alpha-Windows-x64.zip' -Force
+
+      - name: Upload independent Windows Blinter package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blinter-Alpha-Windows-x64
+          path: Blinter-Alpha-Windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
