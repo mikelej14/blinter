@@ -72,6 +72,11 @@ class VIEW3D_PT_blinter_engineering(bpy.types.Panel):
             row.operator("blinter.edge_dimension", text="Dimension",
                          icon='DRIVER_DISTANCE')
             row = col.row(align=True)
+            move = row.operator("blinter.transform_selection", text="Move", icon='TRANSFORM_MOVE')
+            move.action = 'MOVE'
+            scale = row.operator("blinter.transform_selection", text="Scale", icon='TRANSFORM_SCALE')
+            scale.action = 'SCALE'
+            row = col.row(align=True)
             row.operator("mesh.extrude_region_move", text="Extrude", icon='MOD_SOLIDIFY')
             row.operator("mesh.bevel", text="Bevel", icon='MOD_BEVEL')
             col.label(text="Right-click selection for more actions", icon='INFO')
@@ -151,6 +156,13 @@ def draw_blinter_context(self, context):
     self.layout.operator("blinter.toggle_selection_lock",
                          text="Lock / Unlock Selection", icon='DECORATE_LOCKED')
     self.layout.operator("blinter.edge_dimension", text="Set Edge Length", icon='DRIVER_DISTANCE')
+    row = self.layout.row(align=True)
+    move = row.operator("blinter.transform_selection", text="Move With Locks",
+                        icon='TRANSFORM_MOVE')
+    move.action = 'MOVE'
+    scale = row.operator("blinter.transform_selection", text="Scale With Locks",
+                         icon='TRANSFORM_SCALE')
+    scale.action = 'SCALE'
 
 
 classes = (TOPBAR_MT_blinter_design, BLINTER_UL_locked_regions, VIEW3D_PT_blinter_engineering, VIEW3D_PT_blinter_regions, VIEW3D_PT_blinter_precision)
