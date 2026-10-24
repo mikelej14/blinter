@@ -67,6 +67,7 @@ jobs:
           Copy-Item packaging/windows/Install-Blinter.ps1 $out
           Copy-Item packaging/windows/Uninstall-Blinter.ps1 $out
           Copy-Item packaging/windows/SETUP_BLINTER.cmd $out
+          Copy-Item packaging/windows/README_BLINTER_ALPHA.md $out
           Write-Host "Staged Blinter executable: $(Join-Path $payload 'Blinter.exe')"
 
       - name: Check renamed Blinter executable and isolated startup
@@ -83,7 +84,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $dest = Join-Path $env:RUNNER_TEMP 'Blinter Side By Side Test'
-          & 'alpha-package/Install-Blinter.ps1' -InstallDir $dest -NoDesktopShortcut
+          & (Join-Path $PWD.Path 'alpha-package/Install-Blinter.ps1') -InstallDir $dest -NoDesktopShortcut
           if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Blinter installer failed.' }
           if (!(Test-Path (Join-Path $dest 'Blinter.exe'))) { throw 'Blinter did not install.' }
           if (!(Test-Path (Join-Path $dest 'portable'))) { throw 'Blinter isolated settings missing.' }
