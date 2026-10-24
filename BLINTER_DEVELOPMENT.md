@@ -168,3 +168,19 @@ Right-click in mesh Edit Mode and choose **Lock / Unlock Selection**, without op
 The right-side **Feature Locks (Fast)** panel now offers an editable region-name list, enable/disable toggles, click-to-activate rows, reselect, remove-one-lock and move-active-region actions. Reselect uses vertex selection mode for exact member retrieval; the geometry stays in its original mesh object. This is a sidebar list, not yet an Outliner hierarchy.
 
 Headless smoke tests now cover naming, reselecting and toggling. Blender executable/GUI verification still pending.
+
+## Blinter native fork integration (rather than a stack of add-ons)
+
+The compact region engine now lives in `scripts/startup/bl_operators/blinter.py`, registered by Blender's own built-in operator registry. Selected-edge dimension editing and a native Boolean hole operator live in `blinter_dimensions.py` in the same built-in operator subsystem. Blinter's primary UI lives in `scripts/startup/bl_ui/blinter.py` and is registered by Blender's built-in UI registry. The old `scripts/addons_core/blinter_engineering` prototype remains for reference/migration but no longer registers the compact rigid-region system.
+
+### Focused modeling user interface
+
+The default scene uses **Focused Design UI**, configurable without a separate modeling mode. The Blender Topbar is rearranged around Blinter, File, Edit, and workspace access, with rendering/CGI-specific topbar commands hidden from the initial experience. The design sidebar has a compact context-aware Design panel, a named Locked Regions section and an initially collapsed Precision & Manufacture section. Lock and edge dimension commands are also present directly in the mesh right-click menu.
+
+This is a UI simplification, **not removal of Blender functionality or source**. Switching off Focused Design UI restores the standard Blender topbar; the underlying sculpting, UV, texture and other workflows remain installed. It does not yet comprehensively hide all CGI tools in every Blender editor, nor does it implement a new visual theme, custom iconography, or a Plasticity-identical look.
+
+### Validation
+
+A native startup regression test at `tests/blinter_native_startup.py` verifies Blinter operators are registered without enabling an add-on, and exercises named region locking, scaling and a Boolean hole cutter. GitHub workflow `.github/workflows/blinter-python-checks.yml` runs Python syntax checks on fork integration files and legacy source. The **GUI and geometry tests still need an actual Blender build**; Python syntax passing alone does not verify Blender registration/API or runtime behavior.
+
+Next integration work: merge geometry relationships and lock variants into one native constraint controller, make ordinary modeling operations constraint-aware, and replace isolated sidebar controls with intentional modeling workspace defaults.
