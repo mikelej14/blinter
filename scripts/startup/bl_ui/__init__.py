@@ -12,6 +12,7 @@ if "bpy" in locals():
 
 _modules = [
     "anim",
+    "blinter",
     "asset_shelf",
     "node_add_menu",
     "node_add_menu_compositor",
@@ -125,6 +126,7 @@ def register():
             register_class(cls)
 
     space_filebrowser.register_props()
+    space_view3d.VIEW3D_MT_edit_mesh_context_menu.append(blinter.draw_blinter_context)
     properties_paint_common.register()
 
     from bpy.props import (
