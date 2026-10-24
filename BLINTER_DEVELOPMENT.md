@@ -126,3 +126,25 @@ Test with:
 blender -b --python tests/blinter_multiselect_locks.py -- /absolute/path/to/blinter
 ```
 This regression tests one vertex, two edges, two adjacent faces, and explicit lock-type overrides. It has not yet run in a Blender executable.
+
+## Compact rigid-region backend (new experimental high-poly path)
+
+**Compact Rigid Regions** is a parallel prototype to the earlier per-vertex-snapshot Feature Locks. It is intended for large multi-selections from vertex, edge or face mode. On capture, the backend:
+
+1. Collects only the selected vertices (including vertices of selected edges/faces).
+2. Computes the selected region's axis-aligned world-space bounds and boundary-edge count once.
+3. Tags each selected vertex with a shared integer rigid-region ID in a persistent Blender BMesh custom data layer.
+4. Stores just the group ID, member count, boundary count and two bound corners in the lock record. It does **not** serialize each member's position.
+
+The **Move Rigid Region** operator computes one world-to-local delta and adds it uniformly to the group's vertices, preserving all distances within the selected region; **Resize Outside Rigid Regions** scales only vertices without group tags. This demonstrates rigid-preserved hole or feature geometry during a surrounding resize, using mesh-native transforms.
+
+**Important engineering distinction:** A region ID and its exterior perimeter do not replace knowledge of *which* interior vertices belong to that region. Every member therefore retains one group tag. This is O(number of selected vertices) lightweight membership storage in the existing mesh, rather than O(number of selected vertices) separately stored XYZ snapshots or per-vertex constraint equations. Actual movement still requires visiting each affected vertex, but the transformation is calculated once for the group. Arbitrary Blender transformations do not yet respect these locks. Existing per-vertex Feature Locks remain available while this faster path is tested; they are currently independent systems and are not yet unified.
+
+Connected faces outside the locked region may stretch when the remainder of a mesh is scaled; no shape-aware remeshing is claimed. Deleting/copying tagged vertices can invalidate group counts or identities and requires recapture. Group membership-count verification is not a complete topology integrity check. Capturing large selections still scans mesh edges for boundary statistics.
+
+Run:
+```
+blender -b --python tests/blinter_rigid_regions.py -- /absolute/path/to/blinter
+```
+
+The script validates a 512-vertex circular region and outside scaling, then uniform translation of the tagged vertices. It has not yet been run against Blender.
