@@ -25,6 +25,8 @@ class TOPBAR_MT_blinter_design(bpy.types.Menu):
                             icon='MOD_SMOOTH')
             layout.operator("blinter.grow_boundary_for_feature",
                             text="Move Feature + Grow Boundary", icon='MOD_SOLIDIFY')
+            layout.operator("blinter.refine_boundary", text="Refine Existing Boundary",
+                            icon='OUTLINER_DATA_MESH')
             layout.operator("blinter.scale_outside_regions", text="Resize Around Locks",
                             icon='TRANSFORM_SCALE')
             layout.menu("VIEW3D_MT_edit_mesh", text="More Mesh Tools")
@@ -155,6 +157,8 @@ class VIEW3D_PT_blinter_precision(bpy.types.Panel):
                          icon='MOD_SMOOTH')
             col.operator("blinter.grow_boundary_for_feature",
                          text="Grow Boundary Around Feature", icon='MOD_SOLIDIFY')
+            col.operator("blinter.refine_boundary", text="Refine Boundary",
+                         icon='OUTLINER_DATA_MESH')
             col.operator("mesh.bevel", text="Precision Bevel", icon='MOD_BEVEL')
             col.operator("mesh.inset", text="Inset Face", icon='SELECT_EXTEND')
         elif context.mode == 'OBJECT' and context.active_object and context.active_object.type == 'MESH':
@@ -178,6 +182,8 @@ def draw_blinter_context(self, context):
                          icon='MOD_SMOOTH')
     self.layout.operator("blinter.grow_boundary_for_feature",
                          text="Extend Boundary + Clearance", icon='MOD_SOLIDIFY')
+    self.layout.operator("blinter.refine_boundary", text="Refine Existing Boundary",
+                         icon='OUTLINER_DATA_MESH')
     row = self.layout.row(align=True)
     move = row.operator("blinter.transform_selection", text="Move With Locks",
                         icon='TRANSFORM_MOVE')
