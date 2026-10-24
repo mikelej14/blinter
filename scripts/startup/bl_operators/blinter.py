@@ -371,8 +371,10 @@ classes = (
 def register():
     bpy.types.Mesh.blinter_rigid_regions = CollectionProperty(type=BLINTER_PG_rigid_region)
     bpy.types.Mesh.blinter_active_rigid_region = IntProperty(default=-1)
+    bpy.types.Scene.blinter_focus_ui = BoolProperty(name="Focused Design UI", description="Simplified engineering top bar, preserves all Blender functionality", default=True)
 
 
 def unregister():
+    del bpy.types.Scene.blinter_focus_ui
     del bpy.types.Mesh.blinter_active_rigid_region
     del bpy.types.Mesh.blinter_rigid_regions
