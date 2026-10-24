@@ -63,7 +63,9 @@ jobs:
           if (Test-Path (Join-Path $payload 'blender-launcher.exe')) {
             Remove-Item (Join-Path $payload 'blender-launcher.exe') -Force
           }
-          New-Item -ItemType Directory -Force -Path (Join-Path $payload 'portable') | Out-Null
+          foreach ($dir in @('portable/config', 'portable/scripts', 'portable/extensions', 'portable/datafiles')) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $payload $dir) | Out-Null
+          }
           Copy-Item packaging/windows/Install-Blinter.ps1 $out
           Copy-Item packaging/windows/Uninstall-Blinter.ps1 $out
           Copy-Item packaging/windows/SETUP_BLINTER.cmd $out
