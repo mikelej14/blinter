@@ -139,6 +139,18 @@ def _boundary_valid(obj, outer, new_center, normal, needed, proposals):
                 inside = not inside
     if not inside:
         return False
+    # Reject perimeter foldovers/self-intersections, including apparently
+    # acceptable local clearances that would create a crossed contour.
+    def turn(a, b, d):
+        return (b[0]-a[0])*(d[1]-a[1]) - (b[1]-a[1])*(d[0]-a[0])
+    for i in range(len(flat)):
+        a, b = flat[i], flat[(i+1) % len(flat)]
+        for j in range(i+1, len(flat)):
+            if j == i or (i+1) % len(flat) == j or (j+1) % len(flat) == i:
+                continue
+            d, e = flat[j], flat[(j+1) % len(flat)]
+            if turn(a,b,d)*turn(a,b,e) < -1e-18 and turn(d,e,a)*turn(d,e,b) < -1e-18:
+                return False
     gap = min(_point_segment_distance(new_center, positions[i],
                                       positions[(i+1) % len(positions)])
               for i in range(len(positions)))
@@ -237,6 +249,19 @@ class BLINTER_OT_grow_boundary_for_feature(bpy.types.Operator):
             if len(matches) != 1 or len(loops) != 2:
                 raise ValueError("Supported case: one planar connected hole loop and one outer boundary")
             outer = next(loop for loop in loops if set(loop) != selected)
+            # Boundary counts alone cannot prove one part: verify the annular
+            # surface actually connects the inner ring to the outer contour.
+            reachable = {ring[0]}
+            pending = [ring[0]]
+            while pending:
+                vertex = pending.pop()
+                for edge in vertex.link_edges:
+                    other = edge.other_vert(vertex)
+                    if other not in reachable:
+                        reachable.add(other)
+                        pending.append(other)
+            if not all(v in reachable for v in outer):
+                raise ValueError("Outer boundary is a separate island, not connected to this feature")
             if len(outer) < 3:
                 raise ValueError("Outer boundary is degenerate")
             # Protect other locked regions. Moving hole+adjacent boundary must not
