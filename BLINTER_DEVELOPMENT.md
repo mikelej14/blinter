@@ -218,3 +218,15 @@ First protective implementation: `scripts/startup/bl_operators/blinter_mesh_inte
 The regression script `tests/blinter_mesh_integrity.py` builds an annular connected polygon surface, changes the inner hole to 6.35 mm and checks a proposed oversized 19 mm inner hole is rejected and fully rolled back. The script has not yet been executed inside Blender; Python syntax CI is not geometry verification.
 
 **Not yet guaranteed:** Detecting *all* self intersections, global/nonlocal surface intersections, ngons' alternative triangulations, UV/normal discontinuities, minimum wall thickness, evaluated modifier collisions, or production watertightness. The objective is zero introduced seams/artifacts, but declaring it achieved requires tested geometric validation, stress testing and later integration with Blender's mesh cleanup/3D-print checks. When unsure, the editor should block or preview an unsafe change rather than create silently flawed geometry.
+
+## General feature move with adaptive connected-mesh propagation
+
+The initial native operator `blinter.adapt_feature_move` is **not hole-specific**. It accepts normal Blender vertex, edge and face selections, including compound selections. The selected feature is moved as a unit; surrounding *unlocked* mesh vertices receive a smoothly decreasing displacement computed from the distance to the original selected geometry. A Blender KDTree accelerates nearest-feature lookup for large meshes. The deformation preserves existing BMesh vertex/edge/face connectivity and uses the transactional local geometry validator; rejected attempts restore the original vertex positions.
+
+Previously captured **world-fixed** regions remain fixed, while any touched **relative rigid** region moves as a whole. The initial influence distance is user-controlled, and an optional conservative retry enlarges the influence radius up to fourfold when local mesh checks reject the first attempt.
+
+This is a **general-purpose local deformation prototype**, NOT a complete geometry/topology reconstruction algorithm. A hole crossing an outer boundary may require extending the part's boundary or re-tessellating faces; this current method does not guarantee that outcome. Similarly, locked straight outer edges require a separate global straight-line or planar boundary constraint, rather than treating their points as unrelated locations. Development should address directed outer-boundary growth, constrained straight-line/plane preservation and manifold topology rebuilding for any selected feature shape—not specialized hole-only fixes.
+
+`tests/blinter_native_propagation.py` creates a connected 9x9 quad grid and tests moving a selected face while holding a world-fixed vertex and displacing adjacent mesh vertices. It must be run in a compiled Blinter runtime; Python compilation only checks syntax.
+
+Future physics/stress visualization is deferred until actual modeling, dimensional constraints and manufacturing geometry validation are reliable.
