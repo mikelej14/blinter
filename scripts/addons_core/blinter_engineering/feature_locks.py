@@ -1,8 +1,11 @@
 """Feature locks for mesh-native engineering edits.
 
-Select one vertex/edge/face feature to pin its selected vertices in WORLD coordinates.
-Select two or more disjoint features and their vertices form one rigid relationship.
-All selected vertices are stored as one protected group, retaining their offsets.
+Lock any selection of vertices, edges, or faces. Selection elements are counted
+in the active Blender selection mode: one element defaults to WORLD anchor,
+multiple elements default to RELATIVE rigid group even when adjacent/connected.
+Users can explicitly override AUTO to WORLD or RELATIVE.
+Selected elements resolve to their participating vertices, without needing
+to treat high-poly connected regions as independent CAD surfaces.
 
 Blinter Scale Unlocked uses native vertex positions, scaling only unprotected verts.
 No automatic interception of vanilla Blender transforms or adaptive surface rebuilding.
@@ -40,7 +43,7 @@ def current_mesh(context):
     return obj, bm
 
 
-def identity_map(obj, bm, create=False):
+def identity_map(obj, bm, create=False, selected_only=None):
     layer = bm.verts.layers.int.get(LAYER)
     if layer is None:
         if not create:
@@ -60,7 +63,9 @@ def identity_map(obj, bm, create=False):
         raise ValueError("Duplicated locked vertex IDs; repair/relock before editing")
     if create:
         next_id = max(int(obj.data.get("blinter_next_vertex_id", 1)), max(mapping, default=0) + 1)
-        for v in bm.verts:
+        # No need to label every vertex of a million-poly mesh.
+        targets = selected_only if selected_only is not None else bm.verts
+        for v in targets:
             if v[layer] <= 0:
                 v[layer] = next_id
                 mapping[next_id] = v
@@ -74,26 +79,25 @@ def selected_vertices(bm):
     return [v for v in bm.verts if v.select and not v.hide]
 
 
-def components(vertices):
-    selected = set(vertices)
-    seen = set()
-    result = []
-    for v in vertices:
-        if v in seen:
-            continue
-        group = set()
-        queue = [v]
-        seen.add(v)
-        while queue:
-            p = queue.pop()
-            group.add(p)
-            for e in p.link_edges:
-                neighbor = e.other_vert(p)
-                if neighbor in selected and neighbor not in seen:
-                    seen.add(neighbor)
-                    queue.append(neighbor)
-        result.append(group)
-    return result
+def selection_info(bm):
+    """Count explicitly selected elements in the active mesh selection domain.
+
+    Faces include all of their verts, edges both endpoints. Count face selection
+    as faces, not their incidental selected edges/verts. This supports adjacent
+    face selections as one relative feature group and avoids graph traversal.
+    """
+    mode = bm.select_mode
+    if 'FACE' in mode:
+        elements = [f for f in bm.faces if f.select and not f.hide]
+        if elements:
+            return len(elements), list({v for f in elements for v in f.verts}), 'faces'
+    if 'EDGE' in mode:
+        elements = [e for e in bm.edges if e.select and not e.hide]
+        if elements:
+            return len(elements), list({v for e in elements for v in e.verts}), 'edges'
+    verts = selected_vertices(bm)
+    return len(verts), verts, 'vertices'
+
 
 
 def load_group(lock):
@@ -133,28 +137,48 @@ class BLINTER_OT_lock_features(bpy.types.Operator):
     bl_label = "Lock Selected Features"
     bl_options = {'REGISTER', 'UNDO'}
 
+    lock_type: EnumProperty(
+        name="Lock Behavior",
+        items=[
+            ('AUTO', "Automatic", "One selected element anchors to world; multiple selected elements become a relative group"),
+            ('ANCHOR', "Fixed to World", "Pin all selected geometry to fixed world coordinates"),
+            ('RELATIVE', "Relative", "Keep all selected geometry rigidly related even when touching"),
+        ],
+        default='AUTO',
+    )
+
     @classmethod
     def poll(cls, context):
         return context.mode == 'EDIT_MESH'
 
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
     def execute(self, context):
         try:
             obj, bm = current_mesh(context)
-            verts = selected_vertices(bm)
+            element_count, verts, domain = selection_info(bm)
             if not verts:
                 raise ValueError("Select at least one vertex, edge, or face")
-            parts = components(verts)
-            layer, mapping = identity_map(obj, bm, create=True)
-            ids = sorted(v[layer] for v in verts)
-            pts = {v[layer]: list(obj.matrix_world @ v.co) for v in verts}
+            resolved_type = (
+                ('ANCHOR' if element_count == 1 else 'RELATIVE')
+                if self.lock_type == 'AUTO' else self.lock_type
+            )
+            layer, _ = identity_map(obj, bm, create=True, selected_only=verts)
+            pairs = sorted(((v[layer], list(obj.matrix_world @ v.co)) for v in verts), key=lambda p: p[0])
+            ids = [ident for ident, _ in pairs]
+            pts = [point for _, point in pairs]
+            if len(set(ids)) != len(ids):
+                raise ValueError("Selection has duplicated feature vertex IDs")
             lock = obj.data.blinter_feature_locks.add()
-            lock.kind = 'ANCHOR' if len(parts) == 1 else 'RELATIVE'
-            lock.title = "World Feature" if len(parts) == 1 else f"Relative Pattern ({len(parts)} features)"
-            lock.ids_json = json.dumps(ids)
-            lock.points_json = json.dumps([pts[i] for i in ids])
+            lock.kind = resolved_type
+            lock.title = ("World Feature" if resolved_type == 'ANCHOR'
+                          else f"Relative Group ({element_count} {domain})")
+            lock.ids_json = json.dumps(ids, separators=(',', ':'))
+            lock.points_json = json.dumps(pts, separators=(',', ':'))
             lock.enabled = True
             bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
-            self.report({'INFO'}, f"Locked {len(verts)} vertices in {len(parts)} feature(s)")
+            self.report({'INFO'}, f"Locked {element_count} {domain}, {len(verts)} vertices ({resolved_type})")
             return {'FINISHED'}
         except ValueError as exc:
             self.report({'WARNING'}, str(exc))
@@ -292,8 +316,8 @@ class BLINTER_PT_feature_locks(bpy.types.Panel):
 
     def draw(self, context):
         col = self.layout.column(align=True)
-        col.label(text="1 feature: World Grid anchor")
-        col.label(text="Multiple: Relative group")
+        col.label(text="One selected element: world anchor")
+        col.label(text="Multiple elements: relative group")
         col.operator("blinter.lock_features", icon='DECORATE_LOCKED')
         col.operator("blinter.scale_unlocked", icon='TRANSFORM_SCALE')
         col.operator("blinter.move_relative_group", icon='TRANSFORM_MOVE')
