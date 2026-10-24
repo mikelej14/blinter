@@ -49,7 +49,8 @@ class BLINTER_UL_locked_regions(bpy.types.UIList):
 
 
 class VIEW3D_PT_blinter_engineering(bpy.types.Panel):
-    bl_label = "Blinter | Precision Modeling"
+    """Primary design hub: selection-scoped actions, minimal permanent chrome."""
+    bl_label = "Design"
     bl_idname = "VIEW3D_PT_blinter_engineering"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -57,33 +58,86 @@ class VIEW3D_PT_blinter_engineering(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        obj = context.edit_object
+        col = layout.column(align=True)
+        obj = context.active_object
         if not obj or obj.type != 'MESH':
-            layout.label(text="Select mesh / Edit Mode", icon='INFO')
-            if context.mode == 'OBJECT' and context.active_object and context.active_object.type == 'MESH':
-                layout.operator("blinter.hole_cutter", text="Hole Cutter", icon='MOD_BOOLEAN')
+            col.label(text="Select a mesh to begin", icon='MESH_CUBE')
+            col.menu("VIEW3D_MT_add", text="Create Geometry", icon='ADD')
             return
-        data = obj.data
-        layout.operator("blinter.toggle_selection_lock", text="Lock / Unlock Selection",
-                        icon='DECORATE_LOCKED')
-        row = layout.row()
+        if context.mode == 'EDIT_MESH':
+            row = col.row(align=True)
+            row.operator("blinter.toggle_selection_lock", text="Lock / Unlock",
+                         icon='DECORATE_LOCKED')
+            row.operator("blinter.edge_dimension", text="Dimension",
+                         icon='DRIVER_DISTANCE')
+            row = col.row(align=True)
+            row.operator("mesh.extrude_region_move", text="Extrude", icon='MOD_SOLIDIFY')
+            row.operator("mesh.bevel", text="Bevel", icon='MOD_BEVEL')
+            col.label(text="Right-click selection for more actions", icon='INFO')
+        elif context.mode == 'OBJECT':
+            col.operator("blinter.hole_cutter", text="Cut a Hole", icon='MOD_BOOLEAN')
+            col.label(text="Tab to edit mesh geometry", icon='EDITMODE_HLT')
+        else:
+            col.label(text="Mesh and sculpt tools remain available")
+
+
+class VIEW3D_PT_blinter_regions(bpy.types.Panel):
+    bl_label = "Locked Regions"
+    bl_idname = "VIEW3D_PT_blinter_regions"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Blinter'
+    bl_parent_id = "VIEW3D_PT_blinter_engineering"
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH' and context.edit_object is not None
+
+    def draw(self, context):
+        layout = self.layout
+        data = context.edit_object.data
+        row = layout.row(align=True)
         row.template_list("BLINTER_UL_locked_regions", "", data, "blinter_rigid_regions",
-                          data, "blinter_active_rigid_region", rows=6)
-        actions = row.column(align=True)
-        actions.operator("blinter.select_locked_region", text="", icon='RESTRICT_SELECT_OFF')
-        actions.operator("blinter.remove_selected_region", text="", icon='REMOVE')
-        i = data.blinter_active_rigid_region
-        if 0 <= i < len(data.blinter_rigid_regions):
-            region = data.blinter_rigid_regions[i]
+                          data, "blinter_active_rigid_region", rows=5)
+        tools = row.column(align=True)
+        tools.operator("blinter.select_locked_region", text="", icon='RESTRICT_SELECT_OFF')
+        tools.operator("blinter.remove_selected_region", text="", icon='REMOVE')
+        active = data.blinter_active_rigid_region
+        if 0 <= active < len(data.blinter_rigid_regions):
+            item = data.blinter_rigid_regions[active]
             box = layout.box()
-            box.label(text=f"{region.count:,} vertices | {region.boundary_edges:,} boundary edges")
-            op = box.operator("blinter.move_rigid_region", text="Move Region", icon='TRANSFORM_MOVE')
-            op.group_id = region.group_id
-        layout.separator()
-        layout.operator("blinter.scale_outside_regions", text="Resize Unlocked",
-                        icon='TRANSFORM_SCALE')
-        layout.operator("blinter.edge_dimension", text="Set Edge Length", icon='DRIVER_DISTANCE')
-        layout.label(text="Mesh-native grouped constraints", icon='INFO')
+            box.label(text=f"{item.count:,} mesh vertices | {item.boundary_edges:,} border edges")
+            op = box.operator("blinter.move_rigid_region", text="Move Selected Region",
+                              icon='TRANSFORM_MOVE')
+            op.group_id = item.group_id
+        row = layout.row(align=True)
+        row.operator("blinter.scale_outside_regions", text="Resize Unlocked",
+                     icon='TRANSFORM_SCALE')
+        row.operator("blinter.clear_rigid_regions", text="", icon='UNLOCKED')
+
+
+class VIEW3D_PT_blinter_precision(bpy.types.Panel):
+    bl_label = "Precision & Manufacture"
+    bl_idname = "VIEW3D_PT_blinter_precision"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Blinter'
+    bl_parent_id = "VIEW3D_PT_blinter_engineering"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        col = self.layout.column(align=True)
+        if context.mode == 'EDIT_MESH':
+            col.operator("blinter.edge_dimension", text="Set Edge Length",
+                         icon='DRIVER_DISTANCE')
+            col.operator("mesh.bevel", text="Precision Bevel", icon='MOD_BEVEL')
+            col.operator("mesh.inset", text="Inset Face", icon='SELECT_EXTEND')
+        elif context.mode == 'OBJECT' and context.active_object and context.active_object.type == 'MESH':
+            col.operator("blinter.hole_cutter", text="Hole Cutter", icon='MOD_BOOLEAN')
+        col.separator()
+        col.prop(context.scene, "blinter_focus_ui", text="Focused Design Interface")
+        col.label(text="Disable to see the complete Blender UI")
+
 
 
 def draw_blinter_context(self, context):
@@ -95,4 +149,4 @@ def draw_blinter_context(self, context):
     self.layout.operator("blinter.edge_dimension", text="Set Edge Length", icon='DRIVER_DISTANCE')
 
 
-classes = (TOPBAR_MT_blinter_design, BLINTER_UL_locked_regions, VIEW3D_PT_blinter_engineering)
+classes = (TOPBAR_MT_blinter_design, BLINTER_UL_locked_regions, VIEW3D_PT_blinter_engineering, VIEW3D_PT_blinter_regions, VIEW3D_PT_blinter_precision)
