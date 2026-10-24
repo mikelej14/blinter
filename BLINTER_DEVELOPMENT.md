@@ -17,7 +17,19 @@ File: `scripts/addons_core/blinter_engineering/__init__.py`.
 
 In a Blender build that includes this directory, enable the **Blinter Engineering Viewport** extension/add-on if available in your build. Alternatively run that Python file from Blender's Text Editor. In Edit Mode, select an edge: its measured world-space length is drawn next to the edge in millimeters. Open **N > Blinter > Precision Design > Set Edge Length** to edit the value.
 
-**Current prototype limitations**: the numeric edit moves only the two edge endpoints; connected geometry may deform. It is not yet topology-aware, does not maintain constraint locks, and cannot edit by clicking the drawn text. The overlay processes up to 150 selected edges, and large meshes may need caching. No manufacturing-grade precision or production readiness is claimed.
+The **Quick Modeling** panel also offers a context-sensitive **Quick Actions** menu in Edit Mode, using Blender's own extrude, inset, bevel, move, rotate, and other operators. In Object Mode, **Add Hole Cutter** creates a dimensioned cylinder cutter and an unapplied Boolean Difference modifier on the selected mesh. Place the 3D cursor at the desired hole center; the cutter initially points along global Z and remains movable/editable.
+
+### Smoke test
+
+From a Blender source checkout with a built Blender executable:
+
+```
+blender --background --python tests/blinter_smoke.py -- /absolute/path/to/blinter
+```
+
+The smoke test checks add-on registration, numeric edge editing, and non-destructive cutter creation. It has **not yet been executed here** because the development runtime has no Blender executable.
+
+**Current prototype limitations**: the numeric edit moves only the two edge endpoints; connected geometry may deform. It is not yet topology-aware, does not maintain constraint locks, and cannot edit by clicking the drawn text. The quick menu is an explicit sidebar command, not yet a context auto-popup. The cylinder cutter is a first tool prototype, not a full hole/thread wizard. The overlay processes up to 150 selected edges, and large meshes may need caching. No manufacturing-grade precision or production readiness is claimed.
 
 ## Development sequence
 
