@@ -184,6 +184,7 @@ def register():
 
 def unregister():
     from bpy.utils import unregister_class
+    space_view3d.VIEW3D_MT_edit_mesh_context_menu.remove(blinter.draw_blinter_context)
 
     properties_paint_common.unregister()
 
