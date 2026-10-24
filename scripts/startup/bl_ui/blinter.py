@@ -41,6 +41,7 @@ class BLINTER_UL_locked_regions(bpy.types.UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             row = layout.row(align=True)
             row.prop(item, "name", text="", emboss=False, icon='GROUP_VERTEX')
+            row.prop(item, "kind", text="", emboss=False)
             row.prop(item, "enabled", text="", emboss=False,
                      icon='DECORATE_LOCKED' if item.enabled else 'DECORATE_UNLOCKED')
         else:
@@ -107,9 +108,12 @@ class VIEW3D_PT_blinter_regions(bpy.types.Panel):
             item = data.blinter_rigid_regions[active]
             box = layout.box()
             box.label(text=f"{item.count:,} mesh vertices | {item.boundary_edges:,} border edges")
-            op = box.operator("blinter.move_rigid_region", text="Move Selected Region",
-                              icon='TRANSFORM_MOVE')
-            op.group_id = item.group_id
+            box.label(text="Fixed to world" if item.kind == 'ANCHOR' else "Rigid relative group",
+                      icon='DECORATE_LOCKED')
+            if item.kind == 'RELATIVE':
+                op = box.operator("blinter.move_rigid_region", text="Move Selected Region",
+                                  icon='TRANSFORM_MOVE')
+                op.group_id = item.group_id
         row = layout.row(align=True)
         row.operator("blinter.scale_outside_regions", text="Resize Unlocked",
                      icon='TRANSFORM_SCALE')
