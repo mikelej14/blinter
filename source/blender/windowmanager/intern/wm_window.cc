@@ -597,7 +597,7 @@ static void wm_window_title_text(wmWindowManager *wm,
       }
     }
     else {
-      win_title.append(StringRef("Blender"));
+      win_title.append(StringRef("Blinter"));
     }
     return;
   }
@@ -691,7 +691,7 @@ static void wm_window_title_text(wmWindowManager *wm,
   /* If a project is active, display its name. */
   wm_window_title_project_append(win_title);
 
-  win_title.append(StringRef(" — Blender "));
+  win_title.append(StringRef(" — Blinter "));
   win_title.append(StringRef(BKE_blender_version_string()));
 }
 
