@@ -233,21 +233,6 @@ class BLINTER_OT_clear_rigid_regions(bpy.types.Operator):
         obj.data.blinter_rigid_regions.clear()
         return {'FINISHED'}
 
-class BLINTER_UL_locked_regions(bpy.types.UIList):
-    """Renameable groups within the same mesh, not separate Blender objects."""
-    bl_idname = "BLINTER_UL_locked_regions"
-
-    def draw_item(self, context, layout, data, item, icon, active_data,
-                  active_propname, index):
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            row = layout.row(align=True)
-            row.prop(item, "name", text="", emboss=False, icon='GROUP_VERTEX')
-            row.prop(item, "enabled", text="", emboss=False,
-                     icon='DECORATE_LOCKED' if item.enabled else 'DECORATE_UNLOCKED')
-        else:
-            layout.label(text="", icon='GROUP_VERTEX')
-
-
 def active_region(obj):
     regions = obj.data.blinter_rigid_regions
     index = obj.data.blinter_active_rigid_region
