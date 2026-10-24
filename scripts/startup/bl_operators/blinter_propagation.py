@@ -9,6 +9,7 @@ deformation tool, not a global CAD solver or general topology reconstruction.
 import bpy
 import bmesh
 from mathutils import Vector
+from mathutils.kdtree import KDTree
 from bpy.props import FloatVectorProperty, FloatProperty
 from .blinter import selection_vertices, validate_regions
 from .blinter_mesh_integrity import preflight_and_apply
@@ -17,7 +18,7 @@ EPS = 1e-10
 
 
 def propose_adaptive_move(obj, bm, selection, displacement, reach, group_layer, groups,
-                          locks, protected):
+                          locks):
     """Make one consistent displacement per moved vertex; do not edit mesh here."""
     frame = obj.matrix_world
     inv = frame.inverted()
@@ -40,6 +41,10 @@ def propose_adaptive_move(obj, bm, selection, displacement, reach, group_layer, 
     center = sum(feature_positions, Vector((0, 0, 0))) / len(feature_positions)
     extent = max((p - center).length for p in feature_positions)
     kernel = max(reach, displacement.length * 2.0, extent * .1, EPS)
+    tree = KDTree(len(feature_positions))
+    for index, point in enumerate(feature_positions):
+        tree.insert(point, index)
+    tree.balance()
 
     proposals = {}
     for v in bm.verts:
@@ -51,11 +56,8 @@ def propose_adaptive_move(obj, bm, selection, displacement, reach, group_layer, 
             # rejected downstream rather than silently violating the lock.
             continue
         else:
-            # Closest sample of selected geometry gives local deformation even
-            # for disjoint/complex multi-selection without fitting a NURBS body.
-            # Iterate selected vertices (initial prototype). Use a spatial index
-            # for high-poly production meshes.
-            dist = min((positions[v] - point).length for point in feature_positions)
+            # Spatial index makes this practical on high-poly mesh selections.
+            _, _, dist = tree.find(positions[v])
             if dist >= kernel:
                 continue
             t = dist / kernel
@@ -103,7 +105,7 @@ class BLINTER_OT_adapt_feature_move(bpy.types.Operator):
                 return {'FINISHED'}
             reach = self.influence_mm / 1000.0
             proposals, moved_ids = propose_adaptive_move(
-                obj, bm, selected, delta, reach, layer, members, locks, None,
+                obj, bm, selected, delta, reach, layer, members, locks,
             )
             preflight_and_apply(obj, bm, proposals)
             # Update persistent group bounds only after the edit succeeds.
