@@ -194,3 +194,15 @@ The native Move / Scale With Locks operation (blinter.transform_selection) evalu
 **Important:** Blender's original G/S operations do not yet invoke the constraint controller. The lock-aware actions are surfaced in the built-in Blinter design sidebar and mesh right-click menu; original unconstrained Blender operations remain accessible. Surface deformation around locked areas and robust solver conflicts are not resolved. C/C++ editor integration remains a priority.
 
 The new tests/blinter_native_constraints.py covers a fixed vertex, one rigid group, a whole-part scale and a partial-selection group move. These tests have not yet been executed inside Blender. Python CI checks syntax only.
+
+## Plasticity-inspired modeling on a Blender mesh — local analytic features
+
+The design direction is **not** to replace Blender's geometry model with an always-on CAD NURBS/B-rep engine. We keep Blender's BMesh and modifier systems as the authoritative model. For operations where engineering precision matters, Blinter temporarily recognizes **local analytic features** (such as circles or planes) from a user selection, calculates the CAD-style result, and writes the resulting positions back to the same mesh.
+
+First integrated implementation: `scripts/startup/bl_operators/blinter_features.py` offers **Set Circular Diameter** for a selected, unbranched closed edge loop with 8+ edges. It computes a world-space center, polygon normal and radius, rejects loops with excessive radial or planar error, and changes the selected vertex radial distances to the requested diameter. Vertex ordering, face connections, and Blender object identity are preserved. This is a local analytic **proxy** for precise modeling operations: Blender remains a mesh editor.
+
+The operator refuses to modify a region already covered by a compact Blinter rigid lock. We should eventually have a transactional constraint engine to adjust constraints and dependent features together; until then, rejecting the edit is safer than silently breaking a constraint.
+
+**Limitations:** A centroid-based near-circle fit requires reasonably regular sampling and is not a full arbitrary-angle least-squares circle fit. It does not automatically reshape connected surrounding faces, recognize cylinders or NURBS surfaces, or preserve manifoldness in all cases. It does not save a continuously parametric circle feature into the mesh. The immediate next work is analytic feature metadata (identity and tolerances), controlled propagation to adjacent mesh geometry, and more selected shapes (planes/arcs/fillets). The visual presentation should eventually be fully contextual rather than adding another permanent menu.
+
+Regression test: `tests/blinter_native_features.py` recognizes a 64-edge loop, changes diameter to 6.35 mm and verifies a significantly distorted noncircle is rejected. This test has been committed but has **not run in a Blender executable**. Syntax CI only validates source parsing.
