@@ -66,6 +66,12 @@ def main():
         for v in groups[0][1]:
             assert ((obj.matrix_world @ v.co) - Vector(baseline[v.index])).length < 1e-7
         assert any((v.co - old).length > 1e-6 for v, old in zip(free, old_free))
+        assert bpy.ops.blinter.move_relative_group(offset_mm=(5.0, 2.0, 0.0)) == {'FINISHED'}
+        bm = bmesh.from_edit_mesh(obj.data)
+        _, _, moved_groups = resolve_all(obj, bm)
+        for v in moved_groups[0][1]:
+            expected = Vector(baseline[v.index]) + Vector((.005, .002, 0))
+            assert ((obj.matrix_world @ v.co) - expected).length < 1e-7
         # Lock persists in .blend mesh property storage.
         assert len(obj.data.blinter_feature_locks) == 1
         assert bpy.ops.blinter.remove_feature_locks() == {'FINISHED'}
