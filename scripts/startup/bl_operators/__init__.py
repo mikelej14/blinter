@@ -20,6 +20,7 @@ _modules = [
     "blinter_propagation",
     "blinter_boundary_growth",
     "blinter_topology",
+    "blinter_intersections",
     "bone_selection_sets",
     "clip",
     "connect_to_output",
