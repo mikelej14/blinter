@@ -29,7 +29,9 @@ class VIEW3D_PT_blinter_engineering(bpy.types.Panel):
         layout = self.layout
         obj = context.edit_object
         if not obj or obj.type != 'MESH':
-            layout.label(text="Enter Mesh Edit Mode", icon='INFO')
+            layout.label(text="Select mesh / Edit Mode", icon='INFO')
+            if context.mode == 'OBJECT' and context.active_object and context.active_object.type == 'MESH':
+                layout.operator("blinter.hole_cutter", text="Hole Cutter", icon='MOD_BOOLEAN')
             return
         data = obj.data
         layout.operator("blinter.toggle_selection_lock", text="Lock / Unlock Selection",
@@ -50,6 +52,7 @@ class VIEW3D_PT_blinter_engineering(bpy.types.Panel):
         layout.separator()
         layout.operator("blinter.scale_outside_regions", text="Resize Unlocked",
                         icon='TRANSFORM_SCALE')
+        layout.operator("blinter.edge_dimension", text="Set Edge Length", icon='DRIVER_DISTANCE')
         layout.label(text="Mesh-native grouped constraints", icon='INFO')
 
 
@@ -59,6 +62,7 @@ def draw_blinter_context(self, context):
     self.layout.separator()
     self.layout.operator("blinter.toggle_selection_lock",
                          text="Lock / Unlock Selection", icon='DECORATE_LOCKED')
+    self.layout.operator("blinter.edge_dimension", text="Set Edge Length", icon='DRIVER_DISTANCE')
 
 
 classes = (BLINTER_UL_locked_regions, VIEW3D_PT_blinter_engineering)
