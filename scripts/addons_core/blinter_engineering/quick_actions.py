@@ -2,7 +2,6 @@
 
 import bpy
 import bmesh
-from bpy.props import BoolProperty
 
 
 def mesh_selection(context):
@@ -15,6 +14,21 @@ def mesh_selection(context):
         sum(e.select and not e.hide for e in bm.edges),
         sum(f.select and not f.hide for f in bm.faces),
     )
+
+
+class BLINTER_OT_metric_scene(bpy.types.Operator):
+    """Use millimeters for Blender's native scene measurement display."""
+    bl_idname = "blinter.metric_scene"
+    bl_label = "Use Millimeters"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        units = context.scene.unit_settings
+        units.system = 'METRIC'
+        units.scale_length = 1.0
+        units.length_unit = 'MILLIMETERS'
+        self.report({'INFO'}, "Scene displays millimeters; existing geometry unchanged")
+        return {'FINISHED'}
 
 
 class BLINTER_MT_quick_actions(bpy.types.Menu):
@@ -133,6 +147,7 @@ class BLINTER_PT_quick_actions(bpy.types.Panel):
     def draw(self, context):
         col = self.layout.column(align=True)
         col.operator("blinter.quick_actions", icon='MENU_PANEL')
+        col.operator("blinter.metric_scene", icon='DRIVER_DISTANCE')
         if context.mode == 'OBJECT' and context.active_object and context.active_object.type == 'MESH':
             col.operator("blinter.add_hole_cutter", icon='MOD_BOOLEAN')
         elif context.mode == 'EDIT_MESH':
@@ -143,6 +158,7 @@ class BLINTER_PT_quick_actions(bpy.types.Panel):
 
 
 classes = (
+    BLINTER_OT_metric_scene,
     BLINTER_MT_quick_actions,
     BLINTER_OT_quick_actions,
     BLINTER_OT_add_hole_cutter,
