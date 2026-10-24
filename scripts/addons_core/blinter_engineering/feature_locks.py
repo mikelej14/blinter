@@ -225,6 +225,50 @@ class BLINTER_OT_scale_unlocked(bpy.types.Operator):
             return {'CANCELLED'}
 
 
+class BLINTER_OT_move_relative_group(bpy.types.Operator):
+    """Move a relative feature group as one rigid vertex set; anchors stay fixed."""
+    bl_idname = "blinter.move_relative_group"
+    bl_label = "Move Relative Group"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    offset_mm: FloatVectorProperty(
+        name="Move XYZ (mm)", size=3, default=(0.0, 0.0, 0.0), precision=3,
+        subtype='TRANSLATION',
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH'
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        try:
+            obj, bm = current_mesh(context)
+            _, _, groups = resolve_all(obj, bm)
+            movable = [(lock, verts, points) for lock, verts, points in groups
+                       if lock.kind == 'RELATIVE']
+            if len(movable) != 1:
+                raise ValueError("Select exactly one active relative group in this prototype")
+            lock, vertices, positions = movable[0]
+            # Do not move geometry included in an anchored group.
+            others = {v for other, verts, _ in groups if other != lock for v in verts}
+            if others.intersection(vertices):
+                raise ValueError("Relative group overlaps another lock")
+            delta = Vector(self.offset_mm) / 1000.0
+            inv = obj.matrix_world.inverted_safe()
+            new_positions = [point + delta for point in positions]
+            for vertex, position in zip(vertices, new_positions):
+                vertex.co = inv @ position
+            lock.points_json = json.dumps([list(p) for p in new_positions])
+            bmesh.update_edit_mesh(obj.data, loop_triangles=True, destructive=False)
+            return {'FINISHED'}
+        except ValueError as exc:
+            self.report({'WARNING'}, str(exc))
+            return {'CANCELLED'}
+
+
 class BLINTER_OT_remove_feature_locks(bpy.types.Operator):
     bl_idname = "blinter.remove_feature_locks"
     bl_label = "Unlock All Features"
@@ -252,6 +296,7 @@ class BLINTER_PT_feature_locks(bpy.types.Panel):
         col.label(text="Multiple: Relative group")
         col.operator("blinter.lock_features", icon='DECORATE_LOCKED')
         col.operator("blinter.scale_unlocked", icon='TRANSFORM_SCALE')
+        col.operator("blinter.move_relative_group", icon='TRANSFORM_MOVE')
         col.operator("blinter.remove_feature_locks", icon='UNLOCKED')
         obj = context.edit_object
         if obj and obj.type == 'MESH':
@@ -263,6 +308,7 @@ classes = (
     BLINTER_PG_feature_lock,
     BLINTER_OT_lock_features,
     BLINTER_OT_scale_unlocked,
+    BLINTER_OT_move_relative_group,
     BLINTER_OT_remove_feature_locks,
     BLINTER_PT_feature_locks,
 )
