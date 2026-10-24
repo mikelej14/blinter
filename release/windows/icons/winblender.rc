@@ -24,11 +24,11 @@ BEGIN
     BEGIN
       VALUE "FileVersion", BLEN_VER_RC_STR
       VALUE "ProductVersion", BLEN_VER_RC_STR
-      VALUE "CompanyName", "Blender Foundation"
-      VALUE "FileDescription", "Blender"
+      VALUE "CompanyName", "Blender Foundation / Blinter contributors"
+      VALUE "FileDescription", "Blinter - Engineering Mesh Modeler"
       VALUE "LegalCopyright", "GPLv3 (Blender Foundation)"
-      VALUE "OriginalFilename", "blender.exe"
-      VALUE "ProductName", "Blender"
+      VALUE "OriginalFilename", "Blinter.exe"
+      VALUE "ProductName", "Blinter"
     END
   END
   BLOCK "VarFileInfo"
