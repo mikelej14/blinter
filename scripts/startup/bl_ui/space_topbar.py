@@ -33,8 +33,14 @@ class TOPBAR_HT_upper_bar(Header):
             layout.menu("TOPBAR_MT_file", text="File")
             layout.menu("TOPBAR_MT_edit", text="Edit")
             layout.prop(context.scene, "blinter_focus_ui", text="", icon='PREFERENCES')
-            layout.separator_spacer()
-            layout.label(text="Design  |  Mesh · Precision · Manufacture")
+            layout.separator(type='LINE')
+            if not screen.show_fullscreen:
+                # Keep workspace access: focus UI hides CGI menus, not functionality.
+                layout.template_ID_tabs(window, "workspace", new="workspace.add",
+                                        menu="TOPBAR_MT_workspace_menu")
+            else:
+                layout.operator("screen.back_to_previous", icon='SCREEN_BACK',
+                                text="Back to Previous")
             return
 
         TOPBAR_MT_editor_menus.draw_collapsible(context, layout)
