@@ -1,0 +1,131 @@
+bl_info = {
+    "name": "Blinter Engineering Viewport",
+    "author": "Blinter contributors",
+    "version": (0, 1, 0),
+    "blender": (4, 3, 0),
+    "location": "View3D > Sidebar > Blinter",
+    "description": "Selection-scoped mesh dimensions with direct numeric edge-length editing",
+    "category": "3D View",
+}
+
+import bpy
+import bmesh
+import blf
+from bpy.props import FloatProperty
+from bpy_extras.view3d_utils import location_3d_to_region_2d
+from mathutils import Vector
+
+_draw_handle = None
+
+
+def selected_edges_world(context):
+    obj = context.edit_object
+    if not obj or obj.type != 'MESH':
+        return []
+    bm = bmesh.from_edit_mesh(obj.data)
+    matrix = obj.matrix_world
+    output = []
+    for edge in bm.edges:
+        if edge.select and not edge.hide:
+            a, b = (matrix @ v.co for v in edge.verts)
+            output.append((a, b, (a - b).length))
+    return output
+
+
+def draw_dimensions():
+    context = bpy.context
+    region = context.region
+    rv3d = context.region_data
+    if not region or not rv3d:
+        return
+    font = 0
+    blf.size(font, 13)
+    blf.color(font, 0.25, 0.8, 1.0, 1.0)
+    for a, b, length in selected_edges_world(context)[:150]:
+        p = location_3d_to_region_2d(region, rv3d, (a + b) * 0.5)
+        if p:
+            blf.position(font, p.x + 8, p.y + 8, 0)
+            blf.draw(font, f"{length * 1000:.3f} mm")
+
+
+class BLINTER_OT_set_edge_length(bpy.types.Operator):
+    """Set the first selected edge length; change endpoint vertices in the mesh"""
+    bl_idname = "blinter.set_edge_length"
+    bl_label = "Set Edge Length"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    length_mm: FloatProperty(name="Length (mm)", default=10.0, min=0.001, precision=3)
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH' and context.edit_object is not None
+
+    def invoke(self, context, event):
+        edges = selected_edges_world(context)
+        if edges:
+            self.length_mm = edges[0][2] * 1000.0
+        return context.window_manager.invoke_props_dialog(self)
+
+    def execute(self, context):
+        obj = context.edit_object
+        bm = bmesh.from_edit_mesh(obj.data)
+        edges = [e for e in bm.edges if e.select and not e.hide]
+        if len(edges) != 1:
+            self.report({'WARNING'}, "Select exactly one edge")
+            return {'CANCELLED'}
+        edge = edges[0]
+        v0, v1 = edge.verts
+        # Compute in world coordinates so object scale and rotation are respected.
+        mat = obj.matrix_world
+        a, b = mat @ v0.co, mat @ v1.co
+        delta = b - a
+        if delta.length < 1e-10:
+            self.report({'WARNING'}, "Cannot resize zero-length edge")
+            return {'CANCELLED'}
+        midpoint = (a + b) * 0.5
+        half = delta.normalized() * (self.length_mm / 2000.0)
+        inv = mat.inverted_safe()
+        v0.co = inv @ (midpoint - half)
+        v1.co = inv @ (midpoint + half)
+        bmesh.update_edit_mesh(obj.data, loop_triangles=True, destructive=False)
+        return {'FINISHED'}
+
+
+class BLINTER_PT_engineering(bpy.types.Panel):
+    bl_label = "Precision Design"
+    bl_idname = "BLINTER_PT_engineering"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'Blinter'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Selected edge dimensions in viewport")
+        layout.operator("blinter.set_edge_length", icon='DRIVER_DISTANCE')
+        layout.label(text="Length edit moves edge endpoints", icon='INFO')
+
+
+classes = (BLINTER_OT_set_edge_length, BLINTER_PT_engineering)
+
+
+def register():
+    global _draw_handle
+    for cls in classes:
+        bpy.utils.register_class(cls)
+    if _draw_handle is None:
+        _draw_handle = bpy.types.SpaceView3D.draw_handler_add(
+            draw_dimensions, (), 'WINDOW', 'POST_PIXEL'
+        )
+
+
+def unregister():
+    global _draw_handle
+    if _draw_handle is not None:
+        bpy.types.SpaceView3D.draw_handler_remove(_draw_handle, 'WINDOW')
+        _draw_handle = None
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
+
+
+if __name__ == "__main__":
+    register()
