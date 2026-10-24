@@ -232,6 +232,103 @@ class BLINTER_OT_scale_outside_regions(bpy.types.Operator):
             return {'CANCELLED'}
 
 
+class BLINTER_OT_transform_selection(bpy.types.Operator):
+    """Numerical mesh transform honoring Blinter groups.
+
+    A relative group touched by selection transforms rigidly. A world anchor
+    remains stationary. Unlocked selected vertices receive the requested
+    transform directly. This does not replace Blender G/S hotkeys yet.
+    """
+    bl_idname = "blinter.transform_selection"
+    bl_label = "Transform With Locks"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    action: EnumProperty(
+        name="Transform",
+        items=[('MOVE', "Move", "Translate selected mesh vertices"),
+               ('SCALE', "Scale", "Scale selection, moving rigid groups without distortion")],
+        default='MOVE',
+    )
+    offset_mm: FloatVectorProperty(name="Move XYZ (mm)", size=3, default=(0, 0, 0), precision=3)
+    factor: FloatVectorProperty(name="Scale XYZ", size=3, default=(1, 1, 1), min=0.001, precision=4)
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'EDIT_MESH' and context.edit_object is not None
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=350)
+
+    def execute(self, context):
+        try:
+            obj, bm = edit_mesh(context)
+            selected = set(selection_vertices(bm))
+            if not selected:
+                raise ValueError("Select vertices, edges, or faces")
+            layer, members = validate_regions(obj, bm)
+            by_id = {lock.group_id: lock for lock in obj.data.blinter_rigid_regions}
+            selected_tags = set()
+            if layer is not None:
+                selected_tags = {v[layer] for v in selected if v[layer] > 0}
+            fixed = [by_id[tag] for tag in selected_tags
+                     if by_id[tag].enabled and by_id[tag].kind == 'ANCHOR']
+            if fixed:
+                raise ValueError("Selection touches a world-fixed feature; unlock or deselect it")
+            active_groups = [by_id[tag] for tag in selected_tags
+                             if by_id[tag].enabled and by_id[tag].kind == 'RELATIVE']
+            active_member_vertices = {v for lock in active_groups
+                                      for v in members[lock.group_id]}
+            free_vertices = {v for v in selected
+                             if layer is None or not v[layer] or
+                             not by_id[v[layer]].enabled}
+            relevant = active_member_vertices | free_vertices
+            if not relevant:
+                raise ValueError("No movable mesh geometry selected")
+            # Validate before edits: a full relative region must be available
+            # and overlapping linked legacy locks cannot be silently satisfied.
+            if self.action == 'SCALE':
+                origin = sum((obj.matrix_world @ v.co for v in relevant),
+                             Vector((0.0, 0.0, 0.0))) / len(relevant)
+            else:
+                origin = Vector((0.0, 0.0, 0.0))
+            scale = Vector(self.factor)
+            delta = Vector(self.offset_mm) / 1000.0
+            inverse = obj.matrix_world.inverted_safe()
+            # Compute the new group translation once from group center.
+            group_displacements = {}
+            new_bounds = {}
+            for lock in active_groups:
+                vertices = members[lock.group_id]
+                center = sum((obj.matrix_world @ v.co for v in vertices),
+                             Vector((0.0, 0.0, 0.0))) / len(vertices)
+                if self.action == 'MOVE':
+                    movement = delta
+                else:
+                    target = origin + Vector((center[i] - origin[i]) * scale[i]
+                                             for i in range(3))
+                    movement = target - center
+                group_displacements[lock.group_id] = inverse.to_3x3() @ movement
+                bounds = json.loads(lock.bounds_json)
+                new_bounds[lock.group_id] = [[bounds[k][i] + movement[i] for i in range(3)]
+                                             for k in range(2)]
+            for vertex in free_vertices:
+                world = obj.matrix_world @ vertex.co
+                target = world + delta if self.action == 'MOVE' else (
+                    origin + Vector((world[i] - origin[i]) * scale[i] for i in range(3)))
+                vertex.co = inverse @ target
+            for lock in active_groups:
+                movement = group_displacements[lock.group_id]
+                for vertex in members[lock.group_id]:
+                    vertex.co += movement
+                lock.bounds_json = json.dumps(new_bounds[lock.group_id])
+            bmesh.update_edit_mesh(obj.data, loop_triangles=True, destructive=False)
+            self.report({'INFO'}, "Blinter transform preserved locked region geometry")
+            return {'FINISHED'}
+        except (ValueError, KeyError, ZeroDivisionError) as error:
+            self.report({'WARNING'}, str(error))
+            return {'CANCELLED'}
+
+
 class BLINTER_OT_clear_rigid_regions(bpy.types.Operator):
     bl_idname = "blinter.clear_rigid_regions"
     bl_label = "Unlock Rigid Regions"
@@ -383,6 +480,7 @@ classes = (
     BLINTER_OT_select_locked_region,
     BLINTER_OT_remove_selected_region,
     BLINTER_OT_toggle_selection_lock,
+    BLINTER_OT_transform_selection,
 )
 
 
