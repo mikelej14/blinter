@@ -448,6 +448,7 @@ class BLINTER_OT_toggle_selection_lock(bpy.types.Operator):
                         "to unlock it, or use the region list"
                     )
                 lock = hits[0]
+                unlocked_name = lock.name
                 for v in groups[lock.group_id]:
                     v[layer] = 0
                 index = next(i for i, item in enumerate(obj.data.blinter_rigid_regions)
@@ -457,7 +458,7 @@ class BLINTER_OT_toggle_selection_lock(bpy.types.Operator):
                     index, len(obj.data.blinter_rigid_regions) - 1
                 )
                 bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
-                self.report({'INFO'}, f"Unlocked region {lock.name}")
+                self.report({'INFO'}, f"Unlocked region {unlocked_name}")
                 return {'FINISHED'}
             # Reuse the same capture backend as the right sidebar.
             return bpy.ops.blinter.capture_rigid_region('EXEC_DEFAULT', lock_type='AUTO')
