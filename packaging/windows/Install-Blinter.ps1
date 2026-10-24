@@ -28,7 +28,7 @@ if (-not (Test-Path -LiteralPath $exe)) { throw "Blinter.exe missing after copy.
 # writes normal Blender Foundation\Blender user settings or extensions.
 New-Item -ItemType Directory -Path (Join-Path $InstallDir "portable") -Force | Out-Null
 foreach ($folder in @("config", "scripts", "extensions", "datafiles")) {
-    New-Item -ItemType Directory -Path (Join-Path $InstallDir ("portable\" + $folder)) -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path (Join-Path $InstallDir "portable") $folder) -Force | Out-Null
 }
 Copy-Item -LiteralPath (Join-Path $root "Uninstall-Blinter.ps1") -Destination $InstallDir -Force
 
