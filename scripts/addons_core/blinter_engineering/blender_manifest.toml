@@ -1,0 +1,10 @@
+schema_version = "1.0.0"
+id = "blinter_engineering"
+version = "0.1.0"
+name = "Blinter Engineering Viewport"
+tagline = "Mesh-native manufacturing measurements and precision editing"
+maintainer = "Blinter contributors"
+type = "add-on"
+tags = ["3D View", "Modeling", "Mesh"]
+blender_version_min = "4.3.0"
+license = ["SPDX:GPL-3.0-or-later"]
