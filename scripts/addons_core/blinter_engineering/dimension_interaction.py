@@ -17,6 +17,7 @@ def edge_labels(context):
     if not obj or obj.type != "MESH" or context.region_data is None:
         return []
     bm = bmesh.from_edit_mesh(obj.data)
+    bm.edges.index_update()
     transform = obj.matrix_world
     labels = []
     for edge in bm.edges:
