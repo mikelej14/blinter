@@ -230,3 +230,39 @@ This is a **general-purpose local deformation prototype**, NOT a complete geomet
 `tests/blinter_native_propagation.py` creates a connected 9x9 quad grid and tests moving a selected face while holding a world-fixed vertex and displacing adjacent mesh vertices. It must be run in a compiled Blinter runtime; Python compilation only checks syntax.
 
 Future physics/stress visualization is deferred until actual modeling, dimensional constraints and manufacturing geometry validation are reliable.
+
+## Boundary growth: feature envelope crossing the original outline
+
+A mechanical part should not leave a detached island merely because a moved
+feature crossed its old boundary. A minimum material-clearance constraint
+(6.35 mm, for example) describes an envelope that the surrounding solid must
+accommodate. A move of 7 mm must not simply leave a 0.65 mm slit/island.
+
+First built-in, scoped native BMesh prototype:
+`blinter.grow_boundary_for_feature` works on **connected, planar annular mesh
+surfaces** with one selected circular inner loop and one connected outer loop.
+It moves the feature, identifies which outer side is newly constrained, pushes
+original exterior vertices outward, and can attempt local border repair to
+maintain the user-entered circle-radius-plus-material gap. It rejects crossed
+boundary polygons, detached outer islands, noncoplanar outlines, stored locked
+rims, and local face inversions. All geometry remains one Blender mesh with
+original shared vertices/edges/faces; no STEP/STL intermediate.
+
+The optional straight-boundary choice translates existing collinear side
+vertices rather than inserting a local wing. If this simple strategy cannot
+keep the whole contour clear, the operation refuses it rather than introducing
+a kink that breaks the intended straight edge.
+
+**Explicit limitations:** This is not yet a general feature-sweep/retopology
+system. It does NOT yet build a curved wing/tab from a coarse four-corner
+rectangle, generate additional boundary vertices, operate on closed manifold
+3D solids, provide automatic interactive dragging, or solve multiple interacting
+bolt/clearance constraints. Its outer-boundary updates use existing vertex
+sampling, and attempts requiring new topology can be rejected. Genuine 3D
+watertight tab extrusion/rebuilding, topology addition and selected-feature
+intersection handling remain next milestones.
+
+`tests/blinter_boundary_growth.py` sets up a connected, discretized annular
+mesh, moves the inner circle 7 mm, and asserts that the outer perimeter
+accommodates a 6.35 mm margin without splitting topology. The test remains
+unrun in a compiled Blender executable. GitHub Python CI checks syntax only.
