@@ -183,7 +183,8 @@ class BLINTER_OT_scale_outside_regions(bpy.types.Operator):
         try:
             obj, bm = edit_mesh(context)
             layer, groups = validate_regions(obj, bm)
-            if not any(x.enabled for x in obj.data.blinter_rigid_regions):
+            active_ids = {x.group_id for x in obj.data.blinter_rigid_regions if x.enabled}
+            if not active_ids:
                 raise ValueError("Create a rigid region first")
             minimum = [float('inf')] * 3
             maximum = [float('-inf')] * 3
@@ -200,7 +201,7 @@ class BLINTER_OT_scale_outside_regions(bpy.types.Operator):
             inv = obj.matrix_world.inverted_safe()
             factors = Vector(self.factor)
             for v in bm.verts:
-                if layer is not None and v[layer]:
+                if layer is not None and v[layer] in active_ids:
                     continue
                 world = obj.matrix_world @ v.co
                 v.co = inv @ (pivot + Vector([(world[i] - pivot[i]) * factors[i]
@@ -233,7 +234,7 @@ class BLINTER_OT_clear_rigid_regions(bpy.types.Operator):
 
 
 class BLINTER_PT_rigid_regions(bpy.types.Panel):
-    bl_label = "Compact Rigid Regions"
+    bl_label = "Feature Locks (Fast)"
     bl_idname = "BLINTER_PT_rigid_regions"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
