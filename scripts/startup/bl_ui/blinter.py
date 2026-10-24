@@ -2,6 +2,36 @@
 """Blinter built-in engineering controls, integrated with Blender View3D UI."""
 import bpy
 
+
+class TOPBAR_MT_blinter_design(bpy.types.Menu):
+    bl_label = "Blinter"
+    bl_idname = "TOPBAR_MT_blinter_design"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Modeling", icon='EDITMODE_HLT')
+        layout.menu("VIEW3D_MT_add", text="Add Geometry")
+        layout.menu("TOPBAR_MT_file_import", text="Import")
+        layout.menu("TOPBAR_MT_file_export", text="Export")
+        layout.separator()
+        if context.mode == 'EDIT_MESH':
+            layout.operator("blinter.toggle_selection_lock", text="Lock / Unlock Selection",
+                            icon='DECORATE_LOCKED')
+            layout.operator("blinter.edge_dimension", text="Set Edge Dimension",
+                            icon='DRIVER_DISTANCE')
+            layout.operator("blinter.scale_outside_regions", text="Resize Around Locks",
+                            icon='TRANSFORM_SCALE')
+            layout.menu("VIEW3D_MT_edit_mesh", text="More Mesh Tools")
+        elif context.mode == 'OBJECT':
+            if context.active_object and context.active_object.type == 'MESH':
+                layout.operator("blinter.hole_cutter", text="Hole Cutter", icon='MOD_BOOLEAN')
+            layout.menu("VIEW3D_MT_object", text="More Object Tools")
+        layout.separator()
+        layout.prop(context.scene, "blinter_focus_ui", text="Focused Design Interface",
+                    icon='PREFERENCES')
+        layout.label(text="Full Blender tools remain available in Advanced UI")
+
+
 class BLINTER_UL_locked_regions(bpy.types.UIList):
     """Renameable groups within the same mesh, not separate Blender objects."""
     bl_idname = "BLINTER_UL_locked_regions"
@@ -65,4 +95,4 @@ def draw_blinter_context(self, context):
     self.layout.operator("blinter.edge_dimension", text="Set Edge Length", icon='DRIVER_DISTANCE')
 
 
-classes = (BLINTER_UL_locked_regions, VIEW3D_PT_blinter_engineering)
+classes = (TOPBAR_MT_blinter_design, BLINTER_UL_locked_regions, VIEW3D_PT_blinter_engineering)
