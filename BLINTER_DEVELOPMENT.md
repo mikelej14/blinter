@@ -184,3 +184,13 @@ This is a UI simplification, **not removal of Blender functionality or source**.
 A native startup regression test at `tests/blinter_native_startup.py` verifies Blinter operators are registered without enabling an add-on, and exercises named region locking, scaling and a Boolean hole cutter. GitHub workflow `.github/workflows/blinter-python-checks.yml` runs Python syntax checks on fork integration files and legacy source. The **GUI and geometry tests still need an actual Blender build**; Python syntax passing alone does not verify Blender registration/API or runtime behavior.
 
 Next integration work: merge geometry relationships and lock variants into one native constraint controller, make ordinary modeling operations constraint-aware, and replace isolated sidebar controls with intentional modeling workspace defaults.
+
+## Native consolidated world/relative locks and numerical transforms
+
+Native compact regions now have a persisted lock kind. With automatic selection, one selected vertex, edge, or face defaults to World Fixed; multiple selected elements default to Relative Rigid Group. The native named-region list shows lock type. These share one BMesh integer membership system rather than maintaining independent coordinate snapshot stores.
+
+The native Move / Scale With Locks operation (blinter.transform_selection) evaluates selected geometry. When a selected vertex belongs to a relative group, the entire group is transformed rigidly. With Move, each active group and selected unlocked vertices translate. With Scale, the selected group's center follows the scale but its internal vertex distances are preserved; selected unlocked vertices scale normally. World-fixed groups remain stationary even when selected as part of a whole-mesh resize. Work happens on Blender BMesh coordinates, respecting object world transforms.
+
+**Important:** Blender's original G/S operations do not yet invoke the constraint controller. The lock-aware actions are surfaced in the built-in Blinter design sidebar and mesh right-click menu; original unconstrained Blender operations remain accessible. Surface deformation around locked areas and robust solver conflicts are not resolved. C/C++ editor integration remains a priority.
+
+The new tests/blinter_native_constraints.py covers a fixed vertex, one rigid group, a whole-part scale and a partial-selection group move. These tests have not yet been executed inside Blender. Python CI checks syntax only.
