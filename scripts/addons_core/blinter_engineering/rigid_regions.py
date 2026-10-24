@@ -19,6 +19,7 @@ class BLINTER_PG_rigid_region(bpy.types.PropertyGroup):
     boundary_edges: IntProperty(default=0)
     bounds_json: StringProperty(default="[]")
     enabled: BoolProperty(default=True)
+    name: StringProperty(default='Rigid Feature')
 
 
 def edit_mesh(context):
@@ -76,6 +77,8 @@ def validate_regions(obj, bm):
         if lock.group_id <= 0 or len(members.get(lock.group_id, [])) != lock.count:
             raise ValueError("Rigid group membership changed; unlock and recapture")
     registered = {lock.group_id for lock in obj.data.blinter_rigid_regions}
+    if len(registered) != len(obj.data.blinter_rigid_regions):
+        raise ValueError("Duplicate rigid group IDs")
     if any(tag not in registered for tag in members):
         raise ValueError("Orphan rigid tags found; clear and rebuild group data")
     return layer, members
@@ -98,7 +101,8 @@ class BLINTER_OT_capture_rigid_region(bpy.types.Operator):
             if not selected:
                 raise ValueError("Select mesh vertices, edges or faces")
             layer, groups = validate_regions(obj, bm)
-            if any(v in selected for group in groups.values() for v in group):
+            existing = {v for group in groups.values() for v in group}
+            if any(v in existing for v in selected):
                 raise ValueError("Selection overlaps an existing rigid region")
             if layer is None:
                 layer = bm.verts.layers.int.new(TAG)
@@ -109,6 +113,7 @@ class BLINTER_OT_capture_rigid_region(bpy.types.Operator):
                 v[layer] = group_id
             lock = obj.data.blinter_rigid_regions.add()
             lock.group_id = group_id
+            lock.name = f"Feature {group_id}"
             lock.count = len(selected)
             lock.boundary_edges = boundary
             lock.bounds_json = json.dumps(bounds)
@@ -127,6 +132,7 @@ class BLINTER_OT_move_rigid_region(bpy.types.Operator):
     bl_label = "Move Rigid Region"
     bl_options = {'REGISTER', 'UNDO'}
     offset_mm: FloatVectorProperty(name="XYZ (mm)", size=3, default=(0, 0, 0), precision=3)
+    group_id: IntProperty(name="Group ID", default=0, min=0, description="0 uses first enabled group")
 
     @classmethod
     def poll(cls, context):
@@ -139,9 +145,11 @@ class BLINTER_OT_move_rigid_region(bpy.types.Operator):
         try:
             obj, bm = edit_mesh(context)
             layer, groups = validate_regions(obj, bm)
-            if len(obj.data.blinter_rigid_regions) != 1:
-                raise ValueError("Exactly one rigid region required for this prototype")
-            lock = obj.data.blinter_rigid_regions[0]
+            eligible = [entry for entry in obj.data.blinter_rigid_regions if entry.enabled]
+            lock = (next((entry for entry in eligible if entry.group_id == self.group_id), None)
+                    if self.group_id else (eligible[0] if eligible else None))
+            if lock is None:
+                raise ValueError("No enabled rigid group matches the requested ID")
             vertices = groups.get(lock.group_id, [])
             delta = Vector(self.offset_mm) / 1000.0
             local_delta = obj.matrix_world.inverted_safe().to_3x3() @ delta
@@ -177,11 +185,18 @@ class BLINTER_OT_scale_outside_regions(bpy.types.Operator):
             layer, groups = validate_regions(obj, bm)
             if not any(x.enabled for x in obj.data.blinter_rigid_regions):
                 raise ValueError("Create a rigid region first")
-            positions = [obj.matrix_world @ v.co for v in bm.verts]
-            if not positions:
+            minimum = [float('inf')] * 3
+            maximum = [float('-inf')] * 3
+            found = False
+            for vert in bm.verts:
+                found = True
+                p = obj.matrix_world @ vert.co
+                for i in range(3):
+                    minimum[i] = min(minimum[i], p[i])
+                    maximum[i] = max(maximum[i], p[i])
+            if not found:
                 raise ValueError("Empty mesh")
-            pivot = Vector([(min(p[i] for p in positions) + max(p[i] for p in positions)) / 2
-                            for i in range(3)])
+            pivot = Vector([(minimum[i] + maximum[i]) / 2 for i in range(3)])
             inv = obj.matrix_world.inverted_safe()
             factors = Vector(self.factor)
             for v in bm.verts:
@@ -231,7 +246,10 @@ class BLINTER_PT_rigid_regions(bpy.types.Panel):
         col.operator("blinter.scale_outside_regions", icon='TRANSFORM_SCALE')
         col.operator("blinter.clear_rigid_regions", icon='UNLOCKED')
         if context.edit_object and context.edit_object.type == 'MESH':
-            col.label(text=f"Regions: {len(context.edit_object.data.blinter_rigid_regions)}")
+            locks = context.edit_object.data.blinter_rigid_regions
+            col.label(text=f"Regions: {len(locks)}")
+            for lock in list(locks)[:8]:
+                col.label(text=f"#{lock.group_id}: {lock.count} verts")
         col.label(text="One transform for all tagged vertices")
 
 
