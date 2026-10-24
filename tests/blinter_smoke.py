@@ -18,6 +18,8 @@ def main():
     bpy.context.scene.cursor.location = (0, 0, 0)
     blinter_engineering.register()
     try:
+        assert bpy.ops.blinter.metric_scene() == {'FINISHED'}
+        assert bpy.context.scene.unit_settings.length_unit == 'MILLIMETERS'
         bpy.ops.mesh.primitive_cube_add(size=0.02)
         target = bpy.context.object
         bpy.ops.object.mode_set(mode='EDIT')
