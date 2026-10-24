@@ -2,6 +2,9 @@ name: Blinter Alpha Windows x64 Build
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/blinter-alpha-windows.yml
   push:
     branches:
       - feature/blinter-engineering-foundation
