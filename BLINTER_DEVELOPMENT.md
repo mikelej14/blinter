@@ -62,3 +62,23 @@ Lock references currently use vertex indices plus vertex/edge counts. This detec
 ## Validation status
 
 Changes remain unverified inside a real Blender GUI, including click-hit coordinates, Blender 4.3+ API details and overlay event routing. Run the headless smoke test and interactive manual checks before merging. No automated build has been run from this workspace.
+
+## Relative positional constraints — part edge to hole rim (experimental)
+
+This implements the **relative edge-to-hole clearance** workflow: a circular polygon hole remains a specified distance from a part edge as a Blinter-controlled move changes the reference edge's position.
+
+1. In mesh Edit Mode select exactly one straight part edge; choose **Relative Hole Position > 1. Choose Part Edge**.
+2. Deselect it, and select only the complete edge loop around a circular hole with at least 8 segments.
+3. Choose **2. Lock Hole Clearance**. The measured clearance is the perpendicular distance from the infinite line along the reference edge to the fitted hole boundary, in world units; it is **not** the nearest distance to a finite edge endpoint.
+4. **Set Edge-to-Hole Clearance** moves the hole rim vertices to establish a chosen spacing, e.g. 6.35 mm.
+5. **Move Part Edge + Follow Hole** translates the two reference edge endpoints and the whole hole rim together along their measured relative direction, maintaining the measured spacing.
+
+This deliberately uses mesh geometry and native BMesh vertex transforms rather than STEP/B-rep CAD reconstruction. It fits approximate planar circular rim loops, not analytic CAD circles. **It moves the rim vertices, not all nearby supporting mesh vertices, and therefore may distort connected faces**. It is proof of constraint propagation, *not* an engineering-grade solid edit. It currently stores one edge-to-hole relationship per mesh, and native Blender move/extrude/bevel do **not** yet trigger constraint propagation. Invalid topology changes may escape checks if vertex/edge counts do not change, so save before editing and recapture relationships after topology modifications.
+
+Headless geometry regression script (requires built Blender):
+
+```
+blender --background --python tests/blinter_relative_clearance.py -- /absolute/path/to/blinter
+```
+
+The test creates an isolated reference edge and a 32-segment circular ring; it checks the initial 15 mm edge-to-rim clearance, the same clearance after a 4 mm coupled move, and a subsequent requested 6.35 mm clearance. **Not yet executed in Blender.**
