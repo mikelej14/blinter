@@ -20,13 +20,15 @@ jobs:
             scripts/startup/bl_operators/blinter.py \
             scripts/startup/bl_operators/blinter_dimensions.py \
             scripts/startup/bl_operators/blinter_features.py \
+            scripts/startup/bl_operators/blinter_mesh_integrity.py \
             scripts/startup/bl_operators/__init__.py \
             scripts/startup/bl_ui/blinter.py \
             scripts/startup/bl_ui/space_topbar.py \
             scripts/startup/bl_ui/__init__.py \
             tests/blinter_native_startup.py \
             tests/blinter_native_constraints.py \
-            tests/blinter_native_features.py
+            tests/blinter_native_features.py \
+            tests/blinter_mesh_integrity.py
       - name: Compile experimental modules for migration safety
         run: |
           python -m compileall -q scripts/addons_core/blinter_engineering
