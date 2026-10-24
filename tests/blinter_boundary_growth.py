@@ -40,7 +40,6 @@ def main():
     stack=list(seen)
     while stack:
         for edge in stack.pop().link_edges:
-            neighbor=edge.other_vert(edge.verts[0]) if False else None
             for vertex in edge.verts:
                 if vertex not in seen:
                     seen.add(vertex)
