@@ -53,9 +53,26 @@ def main():
         assert bpy.ops.blinter.scale_outside_regions(factor=(1.5, 1.5, 1)) == {'FINISHED'}
         for v in vertices:
             assert (v.co - before[id(v)]).length < 1e-7
-        assert bpy.ops.blinter.move_rigid_region(offset_mm=(6, 0, 0)) == {'FINISHED'}
+        # Capture a second independent group from the outer loop.
+        bpy.ops.mesh.select_all(action='DESELECT')
+        bm = bmesh.from_edit_mesh(mesh)
+        bm.verts.ensure_lookup_table()
+        layer = bm.verts.layers.int.get(TAG)
+        for vertex in bm.verts:
+            if vertex[layer] == 0:
+                vertex.select_set(True)
+        bm.select_flush_mode()
+        bmesh.update_edit_mesh(mesh)
+        assert bpy.ops.blinter.capture_rigid_region() == {'FINISHED'}
+        assert len(mesh.blinter_rigid_regions) == 2
+        second = mesh.blinter_rigid_regions[1]
+        assert second.count == 128
+        assert bpy.ops.blinter.move_rigid_region(group_id=lock.group_id, offset_mm=(6, 0, 0)) == {'FINISHED'}
         for v in vertices:
             assert (v.co - before[id(v)] - Vector((.006, 0, 0))).length < 1e-7
+        bm = bmesh.from_edit_mesh(mesh)
+        _, groups = validate_regions(obj, bm)
+        assert len(groups[second.group_id]) == 128
         assert bpy.ops.blinter.clear_rigid_regions() == {'FINISHED'}
         assert not mesh.blinter_rigid_regions
         print("BLINTER_COMPACT_RIGID_REGIONS_OK")
