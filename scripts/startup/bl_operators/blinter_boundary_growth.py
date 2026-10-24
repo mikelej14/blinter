@@ -76,16 +76,21 @@ def _new_boundary_positions(obj, loop, old_center, new_center, target_radius,
     # Determine outward shift direction from the original hole to the closest
     # exterior edge, then make sure the moved hole is inside that boundary.
     edges = [(old[i], old[(i+1) % len(old)], i) for i in range(len(old))]
-    edge = min(edges, key=lambda item: _point_segment_distance(old_center, item[0], item[1]))
-    a, b, index = edge
-    tangent = (b - a).normalized()
-    outward = normal.cross(tangent).normalized()
-    # Orient toward the side opposite the original hole center.
-    if (old_center - a).dot(outward) > 0:
-        outward.negate()
-    initial_signed = (old_center - a).dot(outward)
-    desired_signed = (new_center - a).dot(outward) + required
-    shift = max(0.0, desired_signed)
+    # Choose the MOST CONSTRAINING side for the target center, not the
+    # nearest original side. Moving left must extend left, not right.
+    candidates = []
+    for a, b, index in edges:
+        tangent = b - a
+        if tangent.length < EPS:
+            raise ValueError("Collapsed outer edge")
+        tangent.normalize()
+        outward = normal.cross(tangent).normalized()
+        if (old_center - a).dot(outward) > 0:
+            outward.negate()
+        shift = (new_center - a).dot(outward) + required
+        candidates.append((shift, index, a, b, tangent, outward))
+    shift, index, a, b, tangent, outward = max(candidates, key=lambda item: item[0])
+    shift = max(0.0, shift)
     if shift <= EPS:
         return {}
     inv = obj.matrix_world.inverted()
@@ -177,9 +182,6 @@ class BLINTER_OT_grow_boundary_for_feature(bpy.types.Operator):
                 self.clearance_mm / 1000.0, normal, self.keep_edge_straight,
             )
             proposed.update(boundary)
-            if set(proposed) & set(outer) == set():
-                # No border extension may still be safe if hole stays inside.
-                pass
             preflight_and_apply(obj, bm, proposed)
             bmesh.update_edit_mesh(obj.data, loop_triangles=True, destructive=False)
             self.report({'INFO'}, "Adjusted existing boundary and hole mesh together")
