@@ -9,7 +9,7 @@ bl_info = {
 }
 
 import bpy
-from . import quick_actions, dimension_interaction, edge_locks, relative_hole, feature_locks
+from . import quick_actions, dimension_interaction, edge_locks, relative_hole, feature_locks, rigid_regions
 import bmesh
 import blf
 import math
@@ -185,6 +185,7 @@ def register():
     edge_locks.register()
     relative_hole.register()
     feature_locks.register()
+    rigid_regions.register()
     if _draw_handle is None:
         _draw_handle = bpy.types.SpaceView3D.draw_handler_add(
             draw_dimensions, (), 'WINDOW', 'POST_PIXEL'
@@ -196,6 +197,7 @@ def unregister():
     if _draw_handle is not None:
         bpy.types.SpaceView3D.draw_handler_remove(_draw_handle, 'WINDOW')
         _draw_handle = None
+    rigid_regions.unregister()
     feature_locks.unregister()
     relative_hole.unregister()
     edge_locks.unregister()
