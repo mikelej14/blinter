@@ -31,6 +31,11 @@ def main():
         bm.select_flush_mode()
         bmesh.update_edit_mesh(target.data)
         assert bpy.ops.blinter.set_edge_length(length_mm=12.7) == {'FINISHED'}
+        assert bpy.ops.blinter.lock_selected_edge() == {'FINISHED'}
+        assert len(target.data.blinter_edge_locks) == 1
+        assert abs(target.data.blinter_edge_locks[0].length_mm - 12.7) < 0.001
+        assert bpy.ops.blinter.set_edge_length(length_mm=14.0) == {'FINISHED'}
+        assert bpy.ops.blinter.restore_edge_locks() == {'FINISHED'}
         bm = bmesh.from_edit_mesh(target.data)
         selected = [e for e in bm.edges if e.select]
         assert len(selected) == 1
