@@ -44,11 +44,21 @@ jobs:
       - name: Get required Blender native Windows libraries
         shell: pwsh
         run: |
-          git lfs install
-          git submodule update --init lib/windows_x64
-          if ($LASTEXITCODE -ne 0) { throw "Blender dependency submodule failed." }
+          $ErrorActionPreference = 'Stop'
+          git lfs install --local
+          # Blender deliberately records 'update = none' for precompiled
+          # dependencies in .gitmodules. Override explicitly in CI: plain
+          # 'submodule update' reports success but SKIPS the required library.
+          git -c submodule.lib/windows_x64.update=checkout submodule update --init --progress lib/windows_x64
+          if ($LASTEXITCODE -ne 0) { throw "Blender dependency submodule initialization failed." }
+          if (!(Test-Path 'lib/windows_x64/.git')) {
+            throw "Blender windows_x64 libraries were skipped; .gitmodules update=none must be overridden."
+          }
           git -C lib/windows_x64 lfs pull
           if ($LASTEXITCODE -ne 0) { throw "Blender native dependencies LFS failed." }
+          if (!(Test-Path 'lib/windows_x64/python')) {
+            throw "Windows libraries are incomplete; Python runtime directory is missing."
+          }
 
       - name: Build Blinter from fork source (GUI-capable)
         shell: cmd
