@@ -270,10 +270,8 @@ class BLINTER_OT_transform_selection(bpy.types.Operator):
             selected_tags = set()
             if layer is not None:
                 selected_tags = {v[layer] for v in selected if v[layer] > 0}
-            fixed = [by_id[tag] for tag in selected_tags
-                     if by_id[tag].enabled and by_id[tag].kind == 'ANCHOR']
-            if fixed:
-                raise ValueError("Selection touches a world-fixed feature; unlock or deselect it")
+            # World anchors simply stay fixed, even when the user selects
+            # everything for a larger resize. No need to deselect anchor faces.
             active_groups = [by_id[tag] for tag in selected_tags
                              if by_id[tag].enabled and by_id[tag].kind == 'RELATIVE']
             active_member_vertices = {v for lock in active_groups
@@ -283,7 +281,7 @@ class BLINTER_OT_transform_selection(bpy.types.Operator):
                              not by_id[v[layer]].enabled}
             relevant = active_member_vertices | free_vertices
             if not relevant:
-                raise ValueError("No movable mesh geometry selected")
+                raise ValueError("Selection contains only world-fixed geometry")
             # Validate before edits: a full relative region must be available
             # and overlapping linked legacy locks cannot be silently satisfied.
             if self.action == 'SCALE':
