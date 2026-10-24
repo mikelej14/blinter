@@ -82,3 +82,25 @@ blender --background --python tests/blinter_relative_clearance.py -- /absolute/p
 ```
 
 The test creates an isolated reference edge and a 32-segment circular ring; it checks the initial 15 mm edge-to-rim clearance, the same clearance after a 4 mm coupled move, and a subsequent requested 6.35 mm clearance. **Not yet executed in Blender.**
+
+## Feature locks and bolt-pattern-safe mesh resizing (experimental)
+
+**Feature Locks** are general to mesh vertices, edges, and faces; geometry uses Blender BMesh only.
+
+- One connected selected feature/component: **World Grid anchor**. It records every selected vertex's world-space position. Blinter constrained resizing will not move those vertices.
+- Two or more disconnected selected components: **Relative Pattern**. It stores all selected vertices as one rigid group, preserving individual feature sizes as well as feature-to-feature spacing.
+- **Resize Around Locked Features** scales every *unlocked* mesh vertex around a chosen pivot (world bounding center, object origin, or cursor). Locked vertices stay unchanged. This is deliberately an *edit-mode mesh operation*, not ordinary Object Mode scale, and does not change object transforms.
+- **Move Relative Group** translates one stored relative group as a rigid vertex set and updates its stored positions. World-anchored features remain pinned.
+- **Unlock All Features** removes all stored lock groups on this mesh.
+
+Each participating vertex gets an int BMesh identity layer rather than depending only on its current vertex index. Lost/duplicated IDs are reported. Lock data is persisted on the mesh datablock for .blend saves. This does **not** mean arbitrary topology edits are supported: cloning vertices can duplicate their IDs and requires repair/relocking.
+
+**Important design limitation:** Only explicitly Blinter-controlled operations honor these locks. Ordinary Blender Scale, Move, Sculpt and modifiers are intentionally not overridden yet. The current resize scales all unprotected vertices without automatically smoothing or remeshing adjoining faces; boundary geometry can be distorted. It is a controllable mechanism for keeping holes and bolt patterns unchanged, *not* yet a robust production-ready solid-resize tool. The next step is region-aware propagation and automatic lock-aware transformation wrappers with validation.
+
+### Regression test
+
+```
+blender --background --python tests/blinter_feature_locks.py -- /absolute/path/to/blinter
+```
+
+The test creates two disjoint 24-sided hole loops and a rectangular outer loop. It verifies that the hole loops remain fixed while the outer loop scales and then verifies rigid translation of the locked hole pattern. This test has not yet been executed in Blender.
