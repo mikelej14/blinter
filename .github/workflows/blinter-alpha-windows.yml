@@ -55,7 +55,7 @@ jobs:
           $out = Join-Path $PWD.Path 'alpha-package'
           $payload = Join-Path $out 'Blinter'
           New-Item -ItemType Directory -Force -Path $payload | Out-Null
-          Copy-Item -LiteralPath (Join-Path $binary.DirectoryName '*') -Destination $payload -Recurse -Force
+          Copy-Item -Path (Join-Path $binary.DirectoryName '*') -Destination $payload -Recurse -Force
           # Rename the actual fork executable; normal Blender remains untouched.
           Rename-Item -LiteralPath (Join-Path $payload 'blender.exe') -NewName 'Blinter.exe'
           $manifest = Join-Path $payload 'blender.exe.manifest'
