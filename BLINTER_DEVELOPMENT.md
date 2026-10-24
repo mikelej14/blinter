@@ -104,3 +104,25 @@ blender --background --python tests/blinter_feature_locks.py -- /absolute/path/t
 ```
 
 The test creates two disjoint 24-sided hole loops and a rectangular outer loop. It verifies that the hole loops remain fixed while the outer loop scales and then verifies rigid translation of the locked hole pattern. This test has not yet been executed in Blender.
+
+## Arbitrary multi-selection locking (vertex, edge, face)
+
+Feature Locks now work with Blender's normal high-poly multi-selection workflow:
+
+- **Vertex mode:** one selected vertex defaults to WORLD lock, two or more selected vertices default to one RELATIVE group.
+- **Edge mode:** one selected edge defaults to WORLD lock, two or more selected edges default to one RELATIVE group.
+- **Face mode:** one selected face defaults to WORLD lock, two or more selected faces default to one RELATIVE group, even when adjoining and sharing edges/vertices.
+- Lock Selected Features exposes **Automatic / Fixed to World / Relative**. The explicit override lets you pin many faces to world coordinates or form a rigid group from one face.
+- A selection resolves to the union of participating vertices, deduplicating shared vertices; no requirement for separate disconnected islands.
+- Only vertices participating in the selection are assigned persistent BMesh IDs. Other vertices remain untouched, reducing overhead on large meshes.
+- Locked vertices remain unchanged under **Resize Around Locked Features**; nonlocked vertices are scaled by the operation. The current implementation does not soften/deform surrounding mesh regions intelligently.
+
+Do not confuse *selection element count* with disconnected feature count. These new semantics intentionally use Blender's active selection domain. Because a single face can contain many vertices, a one-face anchor can still lock that entire face's shape and coordinates.
+
+The lock data contains a full coordinate snapshot of every participating vertex. This is not yet optimized for enormous million-vertex lock sets, and it may consume substantial .blend storage at that scale. Further work includes compact indexed storage, spatially-local transformation propagation and stress tests.
+
+Test with:
+```
+blender -b --python tests/blinter_multiselect_locks.py -- /absolute/path/to/blinter
+```
+This regression tests one vertex, two edges, two adjacent faces, and explicit lock-type overrides. It has not yet run in a Blender executable.
