@@ -19,6 +19,7 @@ _modules = [
     "blinter_features",
     "blinter_propagation",
     "blinter_boundary_growth",
+    "blinter_topology",
     "bone_selection_sets",
     "clip",
     "connect_to_output",
