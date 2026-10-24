@@ -15,9 +15,9 @@ Blinter is a manufacturing-focused Blender fork. It retains Blender's mesh and s
 
 File: `scripts/addons_core/blinter_engineering/__init__.py`.
 
-In a Blender build that includes this directory, enable the **Blinter Engineering Viewport** extension/add-on if available in your build. Alternatively run that Python file from Blender's Text Editor. In Edit Mode, select an edge: its measured world-space length is drawn next to the edge in millimeters. Open **N > Blinter > Precision Design > Set Edge Length** to edit the value.
+In a Blender build that includes this directory, enable the **Blinter Engineering Viewport** extension/add-on if available in your build. For development testing import the `blinter_engineering` package with its parent folder on Blender's Python module path. Running `__init__.py` alone from the Text Editor does not support relative imports. In Edit Mode, select an edge: its measured world-space length is drawn next to the edge in millimeters. Two connected selected edges also show their included angle. Open **N > Blinter > Precision Design > Set Edge Length** to edit the value.
 
-The **Quick Modeling** panel also offers a context-sensitive **Quick Actions** menu in Edit Mode, using Blender's own extrude, inset, bevel, move, rotate, and other operators. In Object Mode, **Add Hole Cutter** creates a dimensioned cylinder cutter and an unapplied Boolean Difference modifier on the selected mesh. Place the 3D cursor at the desired hole center; the cutter initially points along global Z and remains movable/editable.
+The **Quick Modeling** panel includes a **Use Millimeters** display-unit preset, which does not rescale geometry. It also offers a context-sensitive **Quick Actions** menu in Edit Mode, using Blender's own extrude, inset, bevel, move, rotate, and other operators. In Object Mode, **Add Hole Cutter** creates a dimensioned cylinder cutter and an unapplied Boolean Difference modifier on the selected mesh. Place the 3D cursor at the desired hole center; the cutter initially points along global Z and remains movable/editable.
 
 ### Smoke test
 
