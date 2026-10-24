@@ -10,6 +10,7 @@ import bpy
 import bmesh
 from mathutils import Vector
 from bpy.props import FloatProperty
+from .blinter_mesh_integrity import preflight_and_apply
 
 MIN_EDGES = 8
 RADIAL_REL_TOL = .025
@@ -122,8 +123,7 @@ class BLINTER_OT_circle_diameter(bpy.types.Operator):
                 if radial.length <= EPS:
                     raise ValueError("Degenerate vertex on circle center")
                 new_positions.append(inverse @ (center + radial.normalized() * target_radius))
-            for vertex, position in zip(vertices, new_positions):
-                vertex.co = position
+            preflight_and_apply(obj, bm, dict(zip(vertices, new_positions)))
             bmesh.update_edit_mesh(obj.data, loop_triangles=True, destructive=False)
             self.report({'INFO'}, f"Adjusted mesh loop diameter to {self.diameter_mm:.3f} mm")
             return {'FINISHED'}
