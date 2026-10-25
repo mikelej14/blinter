@@ -119,13 +119,20 @@ class BLINTER_OT_capture_rigid_region(bpy.types.Operator):
             existing = {v for group in groups.values() for v in group}
             if any(v in existing for v in selected):
                 raise ValueError("Selection overlaps an existing rigid region")
-            if layer is None:
-                layer = bm.verts.layers.int.new(TAG)
+            # Creating a BMesh CustomData layer can invalidate BMVert Python
+            # references in a live Edit Mode mesh. Calculate geometry first,
+            # save vertex indices, then re-read BMVerts after layer creation.
+            bm.verts.ensure_lookup_table()
+            bm.verts.index_update()
+            selected_indices = [v.index for v in selected]
+            boundary, bounds = summary(obj, bm, selected)
             group_id = max(int(obj.data.get("blinter_next_rigid_group", 1)),
                            max(groups, default=0) + 1)
-            boundary, bounds = summary(obj, bm, selected)
-            for v in selected:
-                v[layer] = group_id
+            if layer is None:
+                layer = bm.verts.layers.int.new(TAG)
+                bm.verts.ensure_lookup_table()
+            for index in selected_indices:
+                bm.verts[index][layer] = group_id
             lock = obj.data.blinter_rigid_regions.add()
             lock.group_id = group_id
             lock.name = ("World Anchor" if kind == 'ANCHOR' else "Rigid Region") + f" {group_id}"
