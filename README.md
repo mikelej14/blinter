@@ -1,38 +1,32 @@
-<!--
-Keep this document short & concise,
-linking to external resources instead of including content in-line.
-See 'release/text/readme.html' for the end user read-me.
--->
-
-Blender
+Blinter
 =======
 
-Blender is the free and open source 3D creation suite.
-It supports the entirety of the 3D pipeline—modeling, rigging, animation, simulation, rendering, compositing,
-motion tracking and video editing.
+**Blinter** is an open-source, engineering-focused fork of **Blender**.
+It keeps Blender's native mesh modeling engine, existing geometry tools, and
+underlying source code while developing a simpler mechanical-design workflow
+with dimensional controls, constraint-aware selections, and intelligent mesh
+topology reconstruction.
 
-![Blender screenshot](https://code.blender.org/wp-content/uploads/2018/12/springrg.jpg "Blender screenshot")
+Blinter is a separate application, not an add-on to an installed copy of
+Blender. Its Windows build packages a distinct executable, application ID,
+installer entry, and private preferences, allowing both programs to coexist.
 
-Project Pages
--------------
+## Windows alpha build
 
-- [Main Website](https://www.blender.org)
-- [Reference Manual](https://docs.blender.org/manual/en/latest/index.html)
-- [User Community](https://www.blender.org/community/)
+The development branch includes a native Windows build pipeline and installer
+sources in [packaging/windows](packaging/windows/README_BLINTER_ALPHA.md).
+Only a successfully compiled and smoke-tested Windows build is offered as an
+installable alpha. A source checkout is not a runnable installer.
 
-Development
------------
+## Upstream acknowledgment
 
-- [Build Instructions](https://developer.blender.org/docs/handbook/building_blender/)
-- [Code Review & Bug Tracker](https://projects.blender.org)
-- [Developer Forum](https://devtalk.blender.org)
-- [Developer Documentation](https://developer.blender.org/docs/)
+Blinter is based on the Blender project, developed by the Blender Foundation
+and its contributors. The full original engine, applicable source notices and
+copyrights are retained. See [blender.org](https://www.blender.org/) and the
+[Blender developer documentation](https://developer.blender.org/docs/).
 
+## Licensing
 
-License
--------
-
-Blender as a whole is licensed under the GNU General Public License, Version 3.
-Individual files may have a different but compatible license.
-
-See [blender.org/about/license](https://www.blender.org/about/license) for details.
+This project inherits Blender's GNU General Public License, version 3, with
+individual source files subject to their compatible existing licenses.
+Blinter is not affiliated with or endorsed by the Blender Foundation.

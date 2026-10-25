@@ -14,6 +14,13 @@ _modules = [
     "add_mesh_torus",
     "anim",
     "assets",
+    "blinter",
+    "blinter_dimensions",
+    "blinter_features",
+    "blinter_propagation",
+    "blinter_boundary_growth",
+    "blinter_topology",
+    "blinter_intersections",
     "bone_selection_sets",
     "clip",
     "connect_to_output",
@@ -73,6 +80,8 @@ def register():
     bone_selection_sets.register()
     copy_global_transform.register()
     project.register()
+    blinter.register()
+    blinter_dimensions.register()
 
 
 def unregister():
@@ -85,6 +94,8 @@ def unregister():
     bone_selection_sets.unregister()
     copy_global_transform.unregister()
     project.unregister()
+    blinter_dimensions.unregister()
+    blinter.unregister()
 
     for mod in reversed(_modules_loaded):
         for cls in reversed(mod.classes):

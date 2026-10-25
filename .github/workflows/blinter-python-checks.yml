@@ -1,0 +1,42 @@
+name: Blinter Python Integration Checks
+
+on:
+  push:
+    branches:
+      - feature/blinter-engineering-foundation
+  pull_request:
+
+jobs:
+  python-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Blinter native fork startup sources
+        run: |
+          python -m py_compile \
+            scripts/startup/bl_operators/blinter.py \
+            scripts/startup/bl_operators/blinter_dimensions.py \
+            scripts/startup/bl_operators/blinter_features.py \
+            scripts/startup/bl_operators/blinter_mesh_integrity.py \
+            scripts/startup/bl_operators/blinter_propagation.py \
+            scripts/startup/bl_operators/blinter_boundary_growth.py \
+            scripts/startup/bl_operators/blinter_topology.py \
+            scripts/startup/bl_operators/blinter_intersections.py \
+            scripts/startup/bl_operators/__init__.py \
+            scripts/startup/bl_ui/blinter.py \
+            scripts/startup/bl_ui/space_topbar.py \
+            scripts/startup/bl_ui/__init__.py \
+            tests/blinter_native_startup.py \
+            tests/blinter_native_constraints.py \
+            tests/blinter_native_features.py \
+            tests/blinter_mesh_integrity.py \
+            tests/blinter_native_propagation.py \
+            tests/blinter_boundary_growth.py \
+            tests/blinter_native_topology.py \
+            tests/blinter_intersections.py
+      - name: Compile experimental modules for migration safety
+        run: |
+          python -m compileall -q scripts/addons_core/blinter_engineering

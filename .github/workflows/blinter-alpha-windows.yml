@@ -1,0 +1,147 @@
+name: Blinter Alpha Windows x64 Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/blinter-alpha-windows.yml
+      - scripts/startup/bl_operators/blinter.py
+  push:
+    branches:
+      - feature/blinter-engineering-foundation
+    paths:
+      - .github/workflows/blinter-alpha-windows.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-package:
+    name: Build native Blinter fork (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 360
+    steps:
+      - name: Checkout fork with original assets
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+          fetch-depth: 1
+
+      - name: Restore Blender LFS assets from official upstream
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # GitHub forks of Blender often have LFS pointer files but lack the
+          # objects in their own LFS storage. Fetch them from upstream instead.
+          git lfs install --local
+          git config --local lfs.url https://projects.blender.org/blender/blender.git/info/lfs
+          git lfs pull
+          if ($LASTEXITCODE -ne 0) { throw "Official Blender LFS source asset retrieval failed" }
+          $startup = 'release/datafiles/startup.blend'
+          if (!(Test-Path $startup) -or (Get-Item $startup).Length -lt 1024) {
+            throw "startup.blend is still a Git LFS pointer, cannot compile a working GUI"
+          }
+
+      - name: Get required Blender native Windows libraries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git lfs install --local
+          # Blender deliberately records 'update = none' for precompiled
+          # dependencies in .gitmodules. Override explicitly in CI: plain
+          # 'submodule update' reports success but SKIPS the required library.
+          git -c submodule.lib/windows_x64.update=checkout submodule update --init --progress lib/windows_x64
+          if ($LASTEXITCODE -ne 0) { throw "Blender dependency submodule initialization failed." }
+          if (!(Test-Path 'lib/windows_x64/.git')) {
+            throw "Blender windows_x64 libraries were skipped; .gitmodules update=none must be overridden."
+          }
+          git -C lib/windows_x64 lfs pull
+          if ($LASTEXITCODE -ne 0) { throw "Blender native dependencies LFS failed." }
+          if (!(Test-Path 'lib/windows_x64/python')) {
+            throw "Windows libraries are incomplete; Python runtime directory is missing."
+          }
+
+      - name: Build Blinter from fork source (GUI-capable)
+        shell: cmd
+        run: |
+          call make.bat full 2022
+          if errorlevel 1 exit /b 1
+
+      - name: Stage isolated Blinter Alpha program
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $buildRoots = @(Get-ChildItem -Path (Split-Path $PWD.Path) -Directory -Filter 'build_windows_Full_x64*')
+          $candidates = @($buildRoots | ForEach-Object {
+            Get-ChildItem -LiteralPath $_.FullName -Filter 'blender.exe' -Recurse -ErrorAction SilentlyContinue
+          } | Where-Object {
+            Test-Path (Join-Path $_.DirectoryName '5.4')
+          })
+          if ($candidates.Count -lt 1) {
+            throw "Could not locate complete 5.4 Blender install tree after build."
+          }
+          $binary = $candidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          $out = Join-Path $PWD.Path 'alpha-package'
+          $payload = Join-Path $out 'Blinter'
+          New-Item -ItemType Directory -Force -Path $payload | Out-Null
+          Copy-Item -Path (Join-Path $binary.DirectoryName '*') -Destination $payload -Recurse -Force
+          # Rename the actual fork executable; normal Blender remains untouched.
+          Rename-Item -LiteralPath (Join-Path $payload 'blender.exe') -NewName 'Blinter.exe'
+          $manifest = Join-Path $payload 'blender.exe.manifest'
+          if (Test-Path $manifest) { Rename-Item $manifest 'Blinter.exe.manifest' }
+          if (Test-Path (Join-Path $payload 'blender-launcher.exe')) {
+            Remove-Item (Join-Path $payload 'blender-launcher.exe') -Force
+          }
+          foreach ($dir in @('portable/config', 'portable/scripts', 'portable/extensions', 'portable/datafiles')) {
+            New-Item -ItemType Directory -Force -Path (Join-Path $payload $dir) | Out-Null
+          }
+          Copy-Item packaging/windows/Install-Blinter.ps1 $out
+          Copy-Item packaging/windows/Uninstall-Blinter.ps1 $out
+          Copy-Item packaging/windows/SETUP_BLINTER.cmd $out
+          Copy-Item packaging/windows/README_BLINTER_ALPHA.md $out
+          Write-Host "Staged Blinter executable: $(Join-Path $payload 'Blinter.exe')"
+
+      - name: Check renamed Blinter executable and isolated startup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD.Path 'alpha-package/Blinter/Blinter.exe'
+          $arguments = @('--background', '--factory-startup', '--python-exit-code', '71', '--python', (Join-Path $PWD.Path 'tests/blinter_native_startup.py'))
+          & $exe @arguments
+          if ($LASTEXITCODE -ne 0) { throw "Blinter native startup smoke test failed with code $LASTEXITCODE" }
+          & $exe --background --factory-startup --python-exit-code 71 --python (Join-Path $PWD.Path 'tests/blinter_install_isolation.py')
+          if ($LASTEXITCODE -ne 0) { throw "Blinter is not isolated from normal Blender configuration" }
+
+      - name: Verify Blinter installs and launches separately
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dest = Join-Path $env:RUNNER_TEMP 'Blinter Side By Side Test'
+          & (Join-Path $PWD.Path 'alpha-package/Install-Blinter.ps1') -InstallDir $dest -NoDesktopShortcut
+          if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Blinter installer failed.' }
+          if (!(Test-Path (Join-Path $dest 'Blinter.exe'))) { throw 'Blinter did not install.' }
+          if (!(Test-Path (Join-Path $dest 'portable'))) { throw 'Blinter isolated settings missing.' }
+          if (!(Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\BlinterAlpha')) {
+            throw 'Blinter independent uninstall record missing.'
+          }
+          $exe = Join-Path $dest 'Blinter.exe'
+          & $exe --background --factory-startup --python-exit-code 71 --python 'tests/blinter_native_startup.py'
+          if ($LASTEXITCODE -ne 0) { throw "Installed Blinter failed runtime test: $LASTEXITCODE" }
+          & $exe --background --factory-startup --python-exit-code 71 --python 'tests/blinter_install_isolation.py'
+          if ($LASTEXITCODE -ne 0) { throw "Installed Blinter preference isolation test failed" }
+          # Leave personal portable directory for uninstall semantics validation.
+          & (Join-Path $dest 'Uninstall-Blinter.ps1')
+          if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\BlinterAlpha') {
+            throw 'Blinter uninstall entry survived removal.'
+          }
+          if (!(Test-Path (Join-Path $dest 'portable'))) {
+            throw 'Uninstall incorrectly removed saved Blinter preferences.'
+          }
+
+      - name: Upload independent Windows Blinter package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blinter-Alpha-Windows-x64
+          path: alpha-package/
+          if-no-files-found: error
+          retention-days: 14
