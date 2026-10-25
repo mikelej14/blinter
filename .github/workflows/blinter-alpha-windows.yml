@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/blinter-alpha-windows.yml
+      - scripts/startup/bl_operators/blinter.py
   push:
     branches:
       - feature/blinter-engineering-foundation
