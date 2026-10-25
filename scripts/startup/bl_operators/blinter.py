@@ -122,10 +122,13 @@ class BLINTER_OT_capture_rigid_region(bpy.types.Operator):
             # Creating a BMesh CustomData layer can invalidate BMVert Python
             # references in a live Edit Mode mesh. Calculate geometry first,
             # save vertex indices, then re-read BMVerts after layer creation.
-            bm.verts.ensure_lookup_table()
+            # Calculate geometry before touching BMesh element tables:
+            # Blender may invalidate cached BMVert Python wrappers while
+            # rebuilding lookup/index tables for an Edit Mode mesh.
+            boundary, bounds = summary(obj, bm, selected)
             bm.verts.index_update()
             selected_indices = [v.index for v in selected]
-            boundary, bounds = summary(obj, bm, selected)
+            bm.verts.ensure_lookup_table()
             group_id = max(int(obj.data.get("blinter_next_rigid_group", 1)),
                            max(groups, default=0) + 1)
             if layer is None:
